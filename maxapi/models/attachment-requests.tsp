@@ -4,12 +4,17 @@ namespace MaxBotApi;
 @discriminator("type")
 model AttachmentRequest {
   /** Тип вложения */
+  // 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+  @maxLength(64)
+  @pattern("^[a-z_]+$")
   type: string;
 }
 
 /** Токен, полученный после загрузки изображения */
 model PhotoToken {
   /** Закодированная информация загруженного изображения */
+  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  @maxLength(1024)
   token: string;
 }
 
@@ -22,10 +27,14 @@ model PhotoTokens {
 /** Запрос на прикрепление изображения (все поля являются взаимоисключающими) */
 model PhotoAttachmentRequestPayload {
   /** Любой внешний URL изображения, которое вы хотите прикрепить */
+  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @minLength(1)
+  @maxLength(2048)
   url?: string | null;
 
   /** Токен существующего вложения */
+  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  @maxLength(1024)
   token?: string | null;
 
   /** Токены, полученные после загрузки изображений */
@@ -35,27 +44,36 @@ model PhotoAttachmentRequestPayload {
 /** Это информация, которую вы получите, как только аудио/видео будет загружено */
 model UploadedInfo {
   /** Токен — уникальный ID загруженного медиафайла */
+  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  @maxLength(1024)
   token?: string;
 }
 
 /** Полезная нагрузка запроса на прикрепление карточки контакта */
 model ContactAttachmentRequestPayload {
   /** Имя контакта */
+  @maxLength(255)
   name: string | null;
 
   /** ID контакта, если он зарегистрирован в MAX */
+  @minValue(0)
+  @maxValue(9007199254740991)
   contact_id?: int64 | null;
 
   /** Полная информация о контакте в формате VCF */
+  // 4096 — в оригинале лимита нет; запас под VCF-карточку
+  @maxLength(4096)
   vcf_info?: string | null;
 
   /** Телефон контакта в формате VCF */
+  @maxLength(255)
   vcf_phone?: string | null;
 }
 
 /** Полезная нагрузка запроса на прикрепление стикера */
 model StickerAttachmentRequestPayload {
   /** Код стикера */
+  @maxLength(255)
   code: string;
 }
 
@@ -63,7 +81,8 @@ model StickerAttachmentRequestPayload {
 model InlineKeyboardAttachmentRequestPayload {
   /** Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота» */
   @minItems(1)
-  buttons: Button[][];
+  @maxItems(100)
+  buttons: ButtonRow[];
 }
 
 /**
@@ -110,6 +129,7 @@ model VideoAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление аудио к сообщению. Должен быть единственным вложением в сообщении */
 model AudioAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `audio` */
   type: "audio";
 
   /** Полезная нагрузка запроса на прикрепление аудио */
@@ -162,11 +182,14 @@ model ReplyKeyboardAttachmentRequest extends AttachmentRequest {
   direct?: boolean = false;
 
   /** Если задано, reply-клавиатура будет показана только этому участнику чата */
+  @minValue(0)
+  @maxValue(9007199254740991)
   direct_user_id?: int64 | null;
 
   /** Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота» */
   @minItems(1)
-  buttons: ReplyButton[][];
+  @maxItems(100)
+  buttons: ReplyButtonRow[];
 }
 
 /** Запрос на прикрепление вложения географического положения */

@@ -38,36 +38,48 @@ enum ChatType {
 /** Новый получатель сообщения. Может быть пользователем или чатом */
 model Recipient {
   /** ID чата. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64 | null;
 
   /** Тип чата */
   chat_type: ChatType;
 
   /** ID пользователя, если сообщение было отправлено пользователю */
+  @minValue(0)
+  @maxValue(9007199254740991)
   user_id: int64 | null;
 }
 
 /** Статистика сообщения. Возвращается только для постов в каналах */
 model MessageStat {
   /** Количество пользователей, которые увидели пост в канале. Просмотр засчитывается, когда пост попадает в область видимости экрана */
+  @minValue(0)
+  @maxValue(2147483647)
   views: integer;
 }
 
 /** Схема, представляющая тело сообщения */
 model MessageBody {
   /** Уникальный ID сообщения */
-  mid: string;
+  mid: MessageId;
 
   /** ID последовательности сообщения в чате */
+  @minValue(0)
+  @maxValue(9007199254740991)
   seq: int64;
 
   /** Новый текст сообщения */
+  // 4000 — официальный лимит текста сообщения (NewMessageBody.text)
+  @maxLength(4000)
   text: string | null;
 
   /** Вложения сообщения. Могут быть одним из типов `Attachment`. Смотрите описание схемы */
+  @maxItems(100)
   attachments?: Attachment[] | null;
 
   /** Разметка текста сообщения. Для подробной информации загляните в раздел [Форматирование](/docs-api#Форматирование%20текста%20в%20сообщениях) */
+  @maxItems(500)
   markup?: MarkupElement[] | null;
 }
 
@@ -80,6 +92,8 @@ model LinkedMessage {
   sender?: User;
 
   /** Чат, в котором сообщение было изначально опубликовано. Только для пересланных сообщений. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id?: int64;
 
   /** Содержимое связанного (пересланного или ответного) сообщения */
@@ -95,6 +109,8 @@ model Message {
   recipient: Recipient;
 
   /** Время создания сообщения в формате Unix-time */
+  @minValue(0)
+  @maxValue(9007199254740991)
   timestamp: int64;
 
   /** Пересланное или ответное сообщение */
@@ -107,12 +123,15 @@ model Message {
   stat?: MessageStat | null;
 
   /** Публичная ссылка на пост в канале. Отсутствует для диалогов и групповых чатов */
+  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  @maxLength(2048)
   url?: string | null;
 }
 
 /** Пагинированный список сообщений */
 model MessageList {
   /** Массив сообщений */
+  @maxItems(100)
   messages: Message[];
 }
 
@@ -122,16 +141,18 @@ model NewMessageLink {
   type: MessageLinkType;
 
   /** ID исходного сообщения */
-  mid: string;
+  mid: MessageId;
 }
 
 /** Новое сообщение, отправляемое ботом */
 model NewMessageBody {
   /** Новый текст сообщения */
+  // 4000 — значение из официальной схемы MAX
   @maxLength(4000)
   text: string | null;
 
   /** Вложения сообщения. Если поле равно `null`, изменений не произойдет. Если пусто, все вложения будут удалены */
+  @maxItems(100)
   attachments: AttachmentRequest[] | null;
 
   /** Ссылка на сообщение */
@@ -153,12 +174,18 @@ model SendMessageResult {
 /** Объект, отправленный боту, когда пользователь нажимает кнопку */
 model Callback {
   /** Unix-время, когда пользователь нажал кнопку */
+  @minValue(0)
+  @maxValue(9007199254740991)
   timestamp: int64;
 
   /** Текущий ID клавиатуры */
+  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  @maxLength(1024)
   callback_id: string;
 
   /** Токен кнопки */
+  // 1024 — официальный лимит источника значения: токен приходит из CallbackButton.payload (maxLength 1024 в оригинале)
+  @maxLength(1024)
   payload?: string;
 
   /** Пользователь, нажавший на кнопку */
@@ -180,7 +207,7 @@ model ActionRequestBody {
 /** Тело запроса на закрепление сообщения в чате */
 model PinMessageBody {
   /** ID сообщения, которое нужно закрепить. Соответствует полю `Message.body.mid` */
-  message_id: string;
+  message_id: MessageId;
 
   /** Если `true`, участники получат уведомление с системным сообщением о закреплении */
   notify?: boolean | null = true;

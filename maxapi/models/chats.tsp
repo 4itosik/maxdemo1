@@ -33,6 +33,8 @@ enum ChatAdminPermission {
  */
 model Chat {
   /** ID чата или канала — в зависимости от ограничений метода и от того, с чем вы работаете. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Тип чата: `"chat"` — Групповой чат, `"channel"` — Канал, `"dialog"` — Диалог */
@@ -42,36 +44,50 @@ model Chat {
   status: ChatStatus;
 
   /** Отображаемое название чата или канала. Может быть `null` для диалогов */
+  // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
+  @maxLength(200)
   title: string | null;
 
   /** Иконка чата или канала */
   icon: Image | null;
 
   /** Время последнего события в чате или канале */
+  @minValue(0)
+  @maxValue(9007199254740991)
   last_event_time: int64;
 
   /** Количество участников чата или канала. Для диалогов всегда `2` */
+  @minValue(0)
+  @maxValue(2147483647)
   participants_count: int32;
 
   /** ID владельца чата или канала */
+  @minValue(0)
+  @maxValue(9007199254740991)
   owner_id?: int64 | null;
 
   /** Участники чата или канала с временем последней активности. Может быть `null`, если запрашивается список чатов */
-  participants?: Record<int64> | null;
+  participants?: Record<SafeInt64> | null;
 
   /** Доступен ли чат публично (для диалогов всегда `false`) */
   is_public: boolean;
 
   /** Ссылка на чат */
+  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  @maxLength(2048)
   link?: string | null;
 
   /** Описание чата или канала */
+  // 400 — официальный лимит описания чата (ChatButton.chat_description)
+  @maxLength(400)
   description: string | null;
 
   /** Данные о пользователе в диалоге (только для чатов типа `"dialog"`) */
   dialog_with_user?: UserWithPhoto | null;
 
   /** Количество сообщений в групповых чатах и каналах */
+  @minValue(0)
+  @maxValue(2147483647)
   messages_count?: integer | null;
 
   /** Закреплённое сообщение в чате (возвращается только при запросе конкретного чата или канала) */
@@ -81,9 +97,12 @@ model Chat {
 /** Пагинированный список чатов */
 model ChatList {
   /** Список запрашиваемых чатов */
+  @maxItems(100)
   chats: Chat[];
 
   /** Указатель на следующую страницу запрашиваемых чатов */
+  @minValue(0)
+  @maxValue(9007199254740991)
   marker: int64 | null;
 }
 
@@ -93,11 +112,18 @@ model ChatPatch {
   icon?: PhotoAttachmentRequestPayload | null;
 
   /** Отображаемое название чата или канала */
+  // 200 — значение из официальной схемы MAX
   @minLength(1)
   @maxLength(200)
   title?: string | null;
 
+  // Инлайн (а не scalar MessageId): для nullable-юниона `MessageId | null`
+  // эмиттер кладёт $ref внутрь allOf рядом с `type: string` — валидаторы
+  // считают такой allOf-с-соседними-ключами анти-паттерном.
   /** ID сообщения для закрепления в чате. Чтобы удалить закреплённое сообщение, используйте метод unpin */
+  @minLength(1)
+  @maxLength(255)
+  @pattern("^[a-zA-Z0-9._\\-]+$")
   pin?: string | null;
 
   /** Если `true`, участники получат системное уведомление об изменении */
@@ -112,6 +138,8 @@ model ChatPatch {
  */
 model ChatMember extends UserWithPhoto {
   /** Время последней активности пользователя в чате. Может быть устаревшим для суперчатов (равно времени вступления) */
+  @minValue(0)
+  @maxValue(9007199254740991)
   last_access_time: int64;
 
   /** Является ли пользователь владельцем группового чата или канала */
@@ -121,6 +149,8 @@ model ChatMember extends UserWithPhoto {
   is_admin: boolean;
 
   /** Дата присоединения к чату в формате Unix time */
+  @minValue(0)
+  @maxValue(9007199254740991)
   join_time: int64;
 
   /**
@@ -128,18 +158,23 @@ model ChatMember extends UserWithPhoto {
    * администратором группового чата или канала. Для обычных участников чата
    * или канала поле не возвращается
    */
+  // 20 — прав в enum всего 13; запас на будущие
+  @maxItems(20)
   permissions: ChatAdminPermission[] | null;
 
   /**
    * Описание роли, которое будет отображаться на клиентском устройстве в
    * настройках чата или канала рядом с именем пользователя
    */
+  @maxLength(255)
   `alias`?: string;
 }
 
 /** Назначить администратора группового чата или канала */
 model ChatAdmin {
   /** Идентификатор пользователя-участника группового чата или канала, который назначается администратором. Максимум — 50 администраторов в чате */
+  @minValue(0)
+  @maxValue(9007199254740991)
   user_id: int64;
 
   /**
@@ -148,12 +183,15 @@ model ChatAdmin {
    * действующему администратору, то его текущие права будут обновлены в
    * соответствии с переданным списком
    */
+  // 20 — прав в enum всего 13; запас на будущие
+  @maxItems(20)
   permissions: ChatAdminPermission[];
 
   /**
    * Описание роли, которое будет отображаться на клиентском устройстве в
    * настройках чата или канала рядом с именем пользователя
    */
+  @maxLength(255)
   `alias`?: string;
 }
 
@@ -164,18 +202,25 @@ model ChatMembersList {
    * а также временем последней активности и списком прав доступа для
    * пользователей и ботов, которые являются администраторами
    */
+  @maxItems(100)
   members: ChatMember[];
 
   /** Указатель на следующую страницу данных */
+  @minValue(0)
+  @maxValue(9007199254740991)
   marker?: int64 | null;
 }
 
 /** Пагинированный список администраторов группового чата или канала */
 model ChatAdminsList {
   /** Список пользователей и ботов, которые получат права администратора группового чата или канала */
+  // 50 — документированный максимум администраторов в чате
+  @maxItems(50)
   admins: ChatAdmin[];
 
   /** Указатель на следующую страницу данных */
+  @minValue(0)
+  @maxValue(9007199254740991)
   marker?: int64 | null;
 }
 
@@ -192,15 +237,17 @@ model ChatAdminsList {
 model UserIdsList {
   /** Массив ID пользователей, которых вы хотите добавить в групповой чат. В одном запросе можно передать максимум 100 идентификаторов */
   @maxItems(100)
-  user_ids: int64[];
+  user_ids: SafeInt64[];
 }
 
 /** Результат запроса на изменение списка участников */
 model ModifyMembersResult extends SimpleQueryResult {
   /** ID пользователей, которых не удалось добавить в групповой чат */
-  failed_user_ids?: int64[] | null;
+  @maxItems(100)
+  failed_user_ids?: SafeInt64[] | null;
 
   /** Подробное объяснение, почему пользователь не был добавлен в групповой чат */
+  @maxItems(100)
   failed_user_details?: FailedUserDetails[] | null;
 }
 
@@ -211,8 +258,10 @@ model FailedUserDetails {
    * конфиденциальности при добавлении пользователей; `add.participant.not.found`
    * — пользователи не найдены
    */
+  @maxLength(255)
   error_code: string;
 
   /** ID пользователей с данной ошибкой */
-  user_ids: int64[];
+  @maxItems(100)
+  user_ids: SafeInt64[];
 }

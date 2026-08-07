@@ -30,7 +30,10 @@ interface Subscriptions {
   @route("/subscriptions")
   @delete
   unsubscribe(
-    /** URL, который нужно удалить из подписок на WebHook */
+    /** URL, который нужно удалить из подписок на WebHook. Webhook-endpoint обязан начинаться с `https://` */
+    // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+    @maxLength(2048)
+    @pattern("^https://.+$")
     @query url: string,
   ): SimpleQueryResult | Unauthorized | InternalError;
 
@@ -51,9 +54,12 @@ interface Subscriptions {
     @query timeout?: integer = 30,
 
     /** Чтобы получить последнее обновление событий, передайте `null` или оставьте поле пустым. Чтобы получить все обновления по событиям с момента предыдущего запроса, передайте значение `marker`, которое получили в ответ на предыдущий запрос */
+    @minValue(0)
+    @maxValue(9007199254740991)
     @query marker?: int64 | null,
 
     /** Список типов событий, которые вы хотите получать, например: `message_created`, `message_callback` */
-    @query types?: string[] | null,
+    @maxItems(50)
+    @query types?: UpdateType[] | null,
   ): UpdateList | Unauthorized | NotAllowed | InternalError;
 }

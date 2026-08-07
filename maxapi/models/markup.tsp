@@ -3,10 +3,20 @@ namespace MaxBotApi;
 /** Элемент разметки текста сообщения */
 @discriminator("type")
 model MarkupElement {
+  /** Тип элемента разметки */
+  // 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+  @maxLength(64)
+  @pattern("^[a-z_]+$")
+  type: string;
+
   /** Индекс начала элемента разметки в тексте. Нумерация с нуля */
+  @minValue(0)
+  @maxValue(2147483647)
   from: int32;
 
   /** Длина элемента разметки */
+  @minValue(0)
+  @maxValue(2147483647)
   length: int32;
 }
 
@@ -30,6 +40,7 @@ model LinkMarkup extends MarkupElement {
   type: "link";
 
   /** URL ссылки */
+  // 2048 — значение из официальной схемы MAX
   @minLength(1)
   @maxLength(2048)
   url: string;
@@ -50,9 +61,12 @@ model UserMentionMarkup extends MarkupElement {
   type: "user_mention";
 
   /** `@username` упомянутого пользователя */
+  @maxLength(255)
   user_link?: string | null;
 
   /** ID упомянутого пользователя без имени */
+  @minValue(0)
+  @maxValue(9007199254740991)
   user_id?: int64 | null;
 }
 

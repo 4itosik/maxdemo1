@@ -11,9 +11,14 @@ namespace MaxBotApi;
 @discriminator("update_type")
 model Update {
   /** Тип события */
+  // 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+  @maxLength(64)
+  @pattern("^[a-z_]+$")
   update_type: string;
 
   /** Unix-время, когда произошло событие */
+  @minValue(0)
+  @maxValue(9007199254740991)
   timestamp: int64;
 }
 
@@ -25,6 +30,7 @@ model MessageCreatedUpdate extends Update {
   message: Message;
 
   /** Текущий язык пользователя в формате IETF BCP 47. Доступно только в диалогах */
+  @maxLength(255)
   user_locale?: string | null;
 }
 
@@ -42,6 +48,7 @@ model MessageCallbackUpdate extends Update {
   message: Message | null;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string | null;
 }
 
@@ -58,20 +65,27 @@ model MessageRemovedUpdate extends Update {
   update_type: "message_removed";
 
   /** ID удалённого сообщения */
-  message_id: string;
+  message_id: MessageId;
 
   /** ID чата, где сообщение было удалено. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, удаливший сообщение */
+  @minValue(0)
+  @maxValue(9007199254740991)
   user_id: int64;
 }
 
 /** Вы получите это событие, как только бот будет добавлен в чат или канал */
 model BotAddedToChatUpdate extends Update {
+  /** Тип события: `bot_added` */
   update_type: "bot_added";
 
   /** ID чата, куда был добавлен бот. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, добавивший бота в чат */
@@ -83,9 +97,12 @@ model BotAddedToChatUpdate extends Update {
 
 /** Вы получите это событие, как только бот будет удалён из чата */
 model BotRemovedFromChatUpdate extends Update {
+  /** Тип события: `bot_removed` */
   update_type: "bot_removed";
 
   /** ID чата, откуда был удалён бот. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, удаливший бота из чата */
@@ -100,19 +117,24 @@ model BotRemovedFromChatUpdate extends Update {
  * общение с ботом: нажмёт соответствующую кнопку в настройках бота в МАКС
  */
 model BotStartedUpdate extends Update {
+  /** Тип события: `bot_started` */
   update_type: "bot_started";
 
   /** ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который нажал кнопку `Start` */
   user: User;
 
   /** Дополнительные данные из диплинков, переданные при запуске бота */
+  // 512 — значение из официальной схемы MAX
   @maxLength(512)
   payload?: string | null;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string;
 }
 
@@ -121,12 +143,15 @@ model BotStoppedUpdate extends Update {
   update_type: "bot_stopped";
 
   /** ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который остановил бота */
   user: User;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string;
 }
 
@@ -135,12 +160,16 @@ model ChatTitleChangedUpdate extends Update {
   update_type: "chat_title_changed";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который изменил название */
   user: User;
 
   /** Новое название */
+  // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
+  @maxLength(200)
   title: string;
 }
 
@@ -149,12 +178,15 @@ model DialogClearedUpdate extends Update {
   update_type: "dialog_cleared";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который очистил историю сообщений */
   user: User;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string;
 }
 
@@ -166,15 +198,20 @@ model DialogMutedUpdate extends Update {
   update_type: "dialog_muted";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который отключил уведомления */
   user: User;
 
   /** Время в формате Unix, до наступления которого диалог был отключён */
+  @minValue(0)
+  @maxValue(9007199254740991)
   muted_until: int64;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string;
 }
 
@@ -186,12 +223,15 @@ model DialogUnmutedUpdate extends Update {
   update_type: "dialog_unmuted";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который включил уведомления */
   user: User;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string;
 }
 
@@ -200,12 +240,15 @@ model DialogRemovedUpdate extends Update {
   update_type: "dialog_removed";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, который удалил чат */
   user: User;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
+  @maxLength(255)
   user_locale?: string;
 }
 
@@ -217,6 +260,8 @@ model UserAddedToChatUpdate extends Update {
   update_type: "user_added";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, добавленный в чат */
@@ -226,6 +271,8 @@ model UserAddedToChatUpdate extends Update {
    * Пользователь, который добавил нового пользователя в чат. Может быть
    * `null`, если пользователь присоединился к чату по ссылке
    */
+  @minValue(0)
+  @maxValue(9007199254740991)
   inviter_id?: int64 | null;
 
   /** Указывает, что пользователь добавлен в канал, а не в чат */
@@ -240,6 +287,8 @@ model UserRemovedFromChatUpdate extends Update {
   update_type: "user_removed";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
+  @minValue(0)
+  @maxValue(9007199254740991)
   chat_id: int64;
 
   /** Пользователь, удалённый из чата */
@@ -249,6 +298,8 @@ model UserRemovedFromChatUpdate extends Update {
    * Администратор, который удалил пользователя из чата. Может быть `null`,
    * если пользователь покинул чат сам
    */
+  @minValue(0)
+  @maxValue(9007199254740991)
   admin_id?: int64;
 
   /** Указывает, что пользователь удалён из канала, а не из чата */
@@ -271,9 +322,11 @@ model MessageChatCreatedUpdate extends Update {
   chat: Chat;
 
   /** ID сообщения, где была нажата кнопка */
-  message_id: string;
+  message_id: MessageId;
 
   /** Полезная нагрузка от кнопки чата */
+  // 512 — официальный лимит источника значения (ChatButton.start_payload)
+  @maxLength(512)
   start_payload?: string | null;
 }
 
@@ -284,39 +337,50 @@ model MessageChatCreatedUpdate extends Update {
  */
 model UpdateList {
   /** Список обновлений о событиях в чатах и каналах, в которые добавлен бот */
+  // 1000 — зеркало максимума параметра limit у GET /updates
+  @maxItems(1000)
   updates: Update[];
 
   /** Указатель на следующую страницу данных */
+  @minValue(0)
+  @maxValue(9007199254740991)
   marker: int64 | null;
 }
 
 /** Схема для описания подписки на WebHook */
 model Subscription {
   /** URL вебхука */
+  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  @maxLength(2048)
   url: string;
 
   /** Unix-время, когда была создана подписка */
+  @minValue(0)
+  @maxValue(9007199254740991)
   time: int64;
 
   /**
    * Типы событий, на которые подписан бот.
    *
-   * В оригинале элементы массива несут `minLength: 1` (см. DEVIATIONS
-   * `Subscription.update_types\[\]` в scripts/compare.py) — перенос этого
-   * ограничения через именованный scalar-тип создаёт в нашей схеме лишнюю
-   * (не присутствующую в оригинале) схему `components.schemas`, поэтому мы
-   * его не переносим и документируем как осознанное отличие.
+   * Элементы типизированы scalar-ом `UpdateType` (КБ: pattern + maxLength
+   * для строк); его `minLength: 1` заодно совпадает с ограничением
+   * элементов в оригинале.
    */
-  update_types: string[] | null;
+  @maxItems(50)
+  update_types: UpdateType[] | null;
 }
 
 /** Запрос на настройку подписки WebHook */
 model SubscriptionRequestBody {
   /** URL HTTPS-endpoint вашего бота. Должен начинаться с `https://` */
+  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  @maxLength(2048)
+  @pattern("^https://.+$")
   url: string;
 
   /** Список типов событий, которые хочет получать ваш бот */
-  update_types?: string[];
+  @maxItems(50)
+  update_types?: UpdateType[];
 
   /**
    * Секрет, который должен быть отправлен в заголовке `X-Max-Bot-Api-Secret`
@@ -324,6 +388,7 @@ model SubscriptionRequestBody {
    * и дефис. Заголовок рекомендован, чтобы запрос поступал из установленного
    * веб-узла
    */
+  // 5..256 — значение из официальной схемы MAX
   @minLength(5)
   @maxLength(256)
   @pattern("^[a-zA-Z0-9_-]{5,256}$")
@@ -333,5 +398,6 @@ model SubscriptionRequestBody {
 /** Список всех WebHook подписок */
 model GetSubscriptionsResult {
   /** Список текущих подписок */
+  @maxItems(100)
   subscriptions: Subscription[];
 }

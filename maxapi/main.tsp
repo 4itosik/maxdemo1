@@ -21,7 +21,16 @@ using OpenAPI;
 
 /** Бот-платформа мессенджера MAX. https://dev.max.ru/docs-api */
 @service(#{ title: "Max Bot API" })
-@info(#{ version: "0.0.32" })
+// TODO: contact — плейсхолдер (требование SCHEMA-валидатора: info.contact
+// обязателен); заменить на реальные контакты команды перед публикацией.
+@info(#{
+  version: "0.0.32",
+  contact: #{
+    name: "Max Bot API (placeholder)",
+    url: "https://dev.max.ru/docs-api",
+    email: "bot-api-placeholder@example.com",
+  },
+})
 @server("https://platform-api2.max.ru")
 @useAuth(ApiKeyAuth<ApiKeyLocation.query, "access_token"> | BearerAuth)
 namespace MaxBotApi;

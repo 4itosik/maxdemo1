@@ -4,3 +4,9 @@ options:
   "@typespec/openapi3":
     file-type: yaml
     output-file: "openapi.{service-name}.yaml"
+    # Требование КБ: у object-схем должны быть явные свойства и
+    # additionalProperties: false. Опция запечатывает все object-схемы
+    # (эмиттер пишет эквивалентное `additionalProperties: {not: {}}`),
+    # кроме базовых схем, расширяемых через allOf, — их запечатать нельзя,
+    # не сломав наследование. См. DEVIATIONS в scripts/compare.py.
+    seal-object-schemas: true

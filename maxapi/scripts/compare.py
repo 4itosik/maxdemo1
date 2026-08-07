@@ -11,12 +11,14 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 OFFICIAL = ROOT / "reference" / "max-openapi-official.json"
 # Сверяется только основной сервис MaxBotApi; второй файл
-# (openapi.MaxBotWebhook.json — контракт webhook-сервера разработчика)
+# (openapi.MaxBotWebhook.yaml — контракт webhook-сервера разработчика)
 # официального аналога не имеет и не сверяется.
-OURS = ROOT / "tsp-output" / "@typespec" / "openapi3" / "openapi.MaxBotApi.json"
+OURS = ROOT / "tsp-output" / "@typespec" / "openapi3" / "openapi.MaxBotApi.yaml"
 
 # Осознанные отличия (regex по строке диффа "path: msg", re.search) — см.
 # README «Отличия от официальной схемы». Каждый паттерн должен быть максимально
@@ -115,7 +117,59 @@ DEVIATIONS = [
     # (2) paths.* (POST /chats/{chatId}/members requestBody) — это основной путь.
     # Якорен конкретно на этом пути, чтобы не подхватить аналогичные артефакты
     # в других местах (если вообще появятся).
-    r"^paths\./chats/\{chatId\}/members\.post\.requestBody\.user_ids(\[\])?: maxItems: официально (None|100), у нас (100|None)$",
+    # Второй путь (schemas.UserIdsList) актуален, пока routes/chats.tsp
+    # отключён в main.tsp и схема сравнивается напрямую, а не через paths.*.
+    r"^(paths\./chats/\{chatId\}/members\.post\.requestBody|schemas\.UserIdsList)\.user_ids(\[\])?: maxItems: официально (None|100), у нас (100|None)$",
+    # ------------------------------------------------------------------
+    # Ужесточения по требованиям Кибербезопасности (КБ) — осознанные
+    # отличия от официальной схемы, внесённые в TypeSpec-исходники.
+    # Обоснования — в doc-комментариях у соответствующих полей *.tsp.
+    # Регексы пришпилены к точным значениям наших ограничений, чтобы
+    # любое другое расхождение тех же ключей всплывало как DIFF.
+    # ------------------------------------------------------------------
+    # seal-object-schemas: все object-схемы (кроме расширяемых через allOf
+    # базовых) запечатаны эквивалентом additionalProperties: false —
+    # эмиттер пишет `{not: {}}`.
+    r"additionalProperties: официально None, у нас \{'not': \{\}\}$",
+    # Числа: явные границы (требование КБ). int64-идентификаторы и
+    # unix-время — 0..2^53-1 (JSON-safe диапазон: ID крупнее 2^53 теряли бы
+    # точность в JS-клиентах, включая веб-клиент MAX); int32 и счётчики/
+    # размеры (width, height, duration, views и т.п.) — 0..2^31-1.
+    r"minimum: официально None, у нас 0$",
+    r"maximum: официально None, у нас 9007199254740991$",
+    r"maximum: официально None, у нас 2147483647$",
+    # Строковые поля: maxLength. Значения по классам полей: 255 — дефолт
+    # для строк без явного размера (включая message_id/mid и — временно,
+    # пока не используется, — транскрипцию аудио); 64 — типы
+    # вложений/событий/кнопок, BotPatch.name; 200/400 — название/описание
+    # чата (зеркала официальных chat_title/chat_description); 512 —
+    # start_payload (зеркало ChatButton.start_payload); 1024 — токены и
+    # payload (зеркало кнопочного payload); 2048 — URL; 4000 — текст
+    # сообщения (зеркало NewMessageBody.text); 4096 — VCF-карточки.
+    r"maxLength: официально None, у нас (64|200|255|400|512|1024|2048|4000|4096)$",
+    # Массивы: maxItems (требование КБ). Значения: 20 — списки прав
+    # (в enum 13 значений); 50 — типы событий, админы (документированный
+    # максимум); 100 — вложения, кнопки в ряду/рядов, страницы пагинации,
+    # списки пользователей; 500 — элементы разметки; 1000 — updates
+    # (зеркало максимума параметра limit).
+    r"maxItems: официально None, у нас (20|50|100|500|1000)$",
+    # Паттерны: тип вложения/события ([a-z_]), https-URL вебхука,
+    # message_id (mid — реальные ID содержат точку), videoToken (паттерн
+    # оригинала не заякорен и пропускал любую строку; заякорен и расширен
+    # до типовых алфавитов токенов base64/base64url/hex).
+    r"pattern: официально None, у нас '\^\[a-z_\]\+\$'$",
+    r"pattern: официально None, у нас '\^https://\.\+\$'$",
+    r"pattern: официально None, у нас '\^\[a-zA-Z0-9\._\\\\-\]\+\$'$",
+    r"pattern: официально '\[a-zA-Z0-9_\\\\-\]\+', у нас '\^\[a-zA-Z0-9\+/=\._\\\\-\]\+\$'$",
+    # minLength 1 приносят scalar-типы MessageId/UpdateType.
+    r"minLength: официально None, у нас 1$",
+    # КБ-идиома «любой текст заданной длины» для полей свободного текста
+    # (имена/описания бота и команд, транскрипция).
+    r"pattern: официально None, у нас '\^\[\\\\s\\\\S\]\{[01],\d+\}\$'$",
+    # callback_id: паттерн оригинала использует lookahead (не поддерживается
+    # RE2/СОВА) и пропускает любое непустое значение — заменён на «любые
+    # непробельные символы».
+    r"^paths\./answers\.post\.param\(query:callback_id\): pattern: официально '\^\(\?!\\\\s\*\$\)\.\+', у нас '\^\\\\S\{1,1024\}\$'$",
 ]
 # Схемы оригинала, которые мы намеренно не воспроизводим
 NAME_ALLOW_MISSING = {"bigint"}
@@ -135,6 +189,8 @@ def report(path, msg):
 
 def load(p):
     with open(p) as f:
+        if p.suffix in (".yaml", ".yml"):
+            return yaml.safe_load(f)
         return json.load(f)
 
 
@@ -160,7 +216,14 @@ def flatten(s, root):
     parts = [flatten(p, root) for p in s["allOf"]]
     parts.append({k: v for k, v in s.items() if k != "allOf"})
     for p in parts:
-        props.update(p.get("properties", {}))
+        for pk, pv in p.get("properties", {}).items():
+            # seal-object-schemas добавляет наследникам пустые стабы ({})
+            # унаследованных свойств, чтобы additionalProperties их не
+            # отсекал; при слиянии allOf стаб не должен затирать
+            # типизированное объявление из базовой схемы.
+            if pv == {} and pk in props:
+                continue
+            props[pk] = pv
         req |= set(p.get("required", []))
         for k, v in p.items():
             if k not in ("properties", "required"):

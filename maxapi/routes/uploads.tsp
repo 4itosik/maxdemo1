@@ -10,9 +10,13 @@ namespace MaxBotApi;
 /** Точка доступа, куда следует загружать ваши бинарные файлы */
 model UploadEndpoint {
   /** URL для загрузки медиафайла. Срок жизни ссылки не ограничен */
+  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  @maxLength(2048)
   url: string;
 
   /** Токен для отправки медиафайла во вложении к сообщению с помощью POST /messages или PUT /messages */
+  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  @maxLength(1024)
   token?: string;
 }
 

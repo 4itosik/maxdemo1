@@ -18,6 +18,8 @@ interface Messages {
   @get
   getMessages(
     /** ID чата, чтобы получить сообщения из определённого чата. Обязательный параметр, если не указан `message_ids` */
+    @minValue(0)
+    @maxValue(9007199254740991)
     @query chat_id?: int64,
 
     /**
@@ -27,14 +29,20 @@ interface Messages {
      * ОТЛИЧИЕ ОТ ОРИГИНАЛА (осознанное, см. DEVIATIONS в scripts/compare.py):
      * в оригинальной схеме этот параметр описан как массив без объявленного
      * items вообще — недосмотр (тот же приём копипасты, что и у UserIdsList).
-     * Мы транскрибируем содержательный смысл: массив строк.
+     * Мы транскрибируем содержательный смысл: массив ID сообщений
+     * (ограничения элементов и maxItems — по требованиям КБ).
      */
-    @query message_ids?: string[],
+    @maxItems(100)
+    @query message_ids?: MessageId[],
 
     /** Время, до которого будут запрошены все сообщения с начала чата (в формате Unix timestamp) */
+    @minValue(0)
+    @maxValue(9007199254740991)
     @query from?: int64,
 
     /** Время, начиная с которого будут запрошены все сообщения до конца чата (в формате Unix timestamp) */
+    @minValue(0)
+    @maxValue(9007199254740991)
     @query to?: int64,
 
     /** Максимальное количество сообщений в ответе */
@@ -55,9 +63,13 @@ interface Messages {
   @post
   sendMessage(
     /** Если вы хотите отправить сообщение пользователю, укажите его ID */
+    @minValue(0)
+    @maxValue(9007199254740991)
     @query user_id?: int64,
 
     /** Если сообщение отправляется в чат, укажите его ID */
+    @minValue(0)
+    @maxValue(9007199254740991)
     @query chat_id?: int64,
 
     /** Если `true`, сервер не будет генерировать превью для ссылок в тексте сообщения */
@@ -80,8 +92,7 @@ interface Messages {
   @put
   editMessage(
     /** ID редактируемого сообщения */
-    @minLength(1)
-    @query message_id: string,
+    @query message_id: MessageId,
 
     @body body: NewMessageBody,
   ): SimpleQueryResult | Unauthorized | InternalError;
@@ -99,8 +110,7 @@ interface Messages {
   @delete
   deleteMessage(
     /** ID удаляемого сообщения */
-    @minLength(1)
-    @query message_id: string,
+    @query message_id: MessageId,
   ): SimpleQueryResult | Unauthorized | Forbidden | InternalError;
 
   /** Возвращает сообщение по его ID */
@@ -110,8 +120,7 @@ interface Messages {
   @get
   getMessageById(
     /** ID сообщения (`mid`), чтобы получить одно сообщение в чате */
-    @pattern("[a-zA-Z0-9_\\-]+")
-    @path messageId: string,
+    @path messageId: MessageId,
   ): Message | Unauthorized | NotFound | InternalError;
 
   /** Возвращает подробную информацию о прикреплённом видео, URL-адреса воспроизведения и дополнительные метаданные */
@@ -120,8 +129,17 @@ interface Messages {
   @route("/videos/{videoToken}")
   @get
   getVideoAttachmentDetails(
-    /** Токен видео-вложения */
-    @pattern("[a-zA-Z0-9_\\-]+")
+    /**
+     * Токен видео-вложения.
+     *
+     * Паттерн оригинала `[a-zA-Z0-9_\-]+` не заякорен и потому пропускает
+     * любую строку с одним допустимым символом; заякорен и расширен до
+     * типовых алфавитов токенов (base64/base64url/hex), maxLength — по
+     * требованиям КБ. См. DEVIATIONS в scripts/compare.py.
+     */
+    // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+    @maxLength(1024)
+    @pattern("^[a-zA-Z0-9+/=._\\-]+$")
     @path videoToken: string,
   ): VideoAttachmentDetails | Unauthorized | Forbidden | NotFound | InternalError;
 
@@ -137,8 +155,13 @@ interface Messages {
   @post
   answerOnCallback(
     /** Идентификатор кнопки, на которую нажал пользователь */
+    // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload).
+    // Паттерн оригинала `^(?!\s*$).+` использует lookahead (не поддерживается
+    // RE2-движками, в т.ч. СОВА) и пропускает любое непустое значение —
+    // заменён на «любые непробельные символы».
     @minLength(1)
-    @pattern("^(?!\\s*$).+")
+    @maxLength(1024)
+    @pattern("^\\S{1,1024}$")
     @query callback_id: string,
 
     @body body: CallbackAnswer,
