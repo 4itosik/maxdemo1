@@ -1,0 +1,3255 @@
+openapi: 3.0.0
+info:
+  title: Max Bot API
+  version: 0.0.32
+  description: Бот-платформа мессенджера MAX. https://dev.max.ru/docs-api
+tags:
+  - name: bots
+  - name: bot-sending
+  - name: messages
+  - name: subscriptions
+  - name: upload
+paths:
+  /answers:
+    post:
+      operationId: answerOnCallback
+      summary: Ответ на callback
+      description: |-
+        Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+        может быть обновлённое сообщение. Не более двух ответов в секунду в один
+        диалог, групповой чат или канал
+      parameters:
+        - name: callback_id
+          in: query
+          required: true
+          description: Идентификатор кнопки, на которую нажал пользователь
+          schema:
+            type: string
+            pattern: ^(?!\s*$).+
+            minLength: 1
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleQueryResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '405':
+          description: Метод не разрешён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+        - bot-sending
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackAnswer'
+  /me:
+    get:
+      operationId: getMyInfo
+      summary: Получение информации о боте
+      description: Возвращает информацию о боте, который идентифицируется с помощью токена доступа `access_token`
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotInfo'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - bots
+        - bot-sending
+  /me/commands:
+    patch:
+      operationId: editMyCommands
+      summary: Редактирование команд бота
+      description: Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotCommandsInfo'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - bots
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BotCommandsPatch'
+  /messages:
+    get:
+      operationId: getMessages
+      summary: Получение сообщений
+      description: |-
+        Возвращает информацию о сообщении или массив сообщений из чата. Нужно
+        указать один из параметров — `chat_id` или `message_ids`
+      parameters:
+        - name: chat_id
+          in: query
+          required: false
+          description: ID чата, чтобы получить сообщения из определённого чата. Обязательный параметр, если не указан `message_ids`
+          schema:
+            type: integer
+            format: int64
+          explode: false
+        - name: message_ids
+          in: query
+          required: false
+          description: |-
+            Список ID сообщений, которые нужно получить (через запятую).
+            Обязательный параметр, если не указан `chat_id`.
+
+            ОТЛИЧИЕ ОТ ОРИГИНАЛА (осознанное, см. DEVIATIONS в scripts/compare.py):
+            в оригинальной схеме этот параметр описан как массив без объявленного
+            items вообще — недосмотр (тот же приём копипасты, что и у UserIdsList).
+            Мы транскрибируем содержательный смысл: массив строк.
+          schema:
+            type: array
+            items:
+              type: string
+          explode: false
+        - name: from
+          in: query
+          required: false
+          description: Время, до которого будут запрошены все сообщения с начала чата (в формате Unix timestamp)
+          schema:
+            type: integer
+            format: int64
+          explode: false
+        - name: to
+          in: query
+          required: false
+          description: Время, начиная с которого будут запрошены все сообщения до конца чата (в формате Unix timestamp)
+          schema:
+            type: integer
+            format: int64
+          explode: false
+        - name: count
+          in: query
+          required: false
+          description: Максимальное количество сообщений в ответе
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Ошибка доступа: нет прав на этот ресурс'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+    post:
+      operationId: sendMessage
+      summary: Отправить сообщение
+      description: |-
+        Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+        не более двух сообщений в секунду в один диалог, групповой чат или канал —
+        при превышении лимита ставьте сообщения в очередь или делайте задержку
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          description: Если вы хотите отправить сообщение пользователю, укажите его ID
+          schema:
+            type: integer
+            format: int64
+          explode: false
+        - name: chat_id
+          in: query
+          required: false
+          description: Если сообщение отправляется в чат, укажите его ID
+          schema:
+            type: integer
+            format: int64
+          explode: false
+        - name: disable_link_preview
+          in: query
+          required: false
+          description: Если `true`, сервер не будет генерировать превью для ссылок в тексте сообщения
+          schema:
+            type: boolean
+            default: false
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+        - bot-sending
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewMessageBody'
+    put:
+      operationId: editMessage
+      summary: Редактировать сообщение
+      description: |-
+        Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+        с кнопками `inline_keyboard` редактируются независимо от срока давности,
+        остальные — если отправлены менее 7 суток назад; в групповых чатах и
+        каналах — независимо от срока давности. Не более двух редактирований в
+        секунду в одном диалоге, групповом чате или канале
+      parameters:
+        - name: message_id
+          in: query
+          required: true
+          description: ID редактируемого сообщения
+          schema:
+            type: string
+            minLength: 1
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleQueryResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+        - bot-sending
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewMessageBody'
+    delete:
+      operationId: deleteMessage
+      summary: Удалить сообщение
+      description: |-
+        Удаляет сообщения в диалоге, групповом чате или канале. Бот должен быть
+        администратором и иметь право на удаление сообщений. В диалоге бот может
+        удалять только собственные сообщения, в групповом чате и канале — любые.
+        Не более двух удалений в секунду в одном диалоге, групповом чате или канале
+      parameters:
+        - name: message_id
+          in: query
+          required: true
+          description: ID удаляемого сообщения
+          schema:
+            type: string
+            minLength: 1
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleQueryResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Ошибка доступа: нет прав на этот ресурс'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+        - bot-sending
+  /messages/{messageId}:
+    get:
+      operationId: getMessageById
+      summary: Получить сообщение
+      description: Возвращает сообщение по его ID
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          description: ID сообщения (`mid`), чтобы получить одно сообщение в чате
+          schema:
+            type: string
+            pattern: '[a-zA-Z0-9_\-]+'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Запрашиваемый ресурс не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+  /subscriptions:
+    get:
+      operationId: getSubscriptions
+      summary: Получение всех подписок через Webhook
+      description: Если ваш бот получает данные через Webhook, этот метод возвращает список всех подписок
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetSubscriptionsResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - subscriptions
+    post:
+      operationId: subscribe
+      summary: Подписка на обновления о новых событиях через Webhook
+      description: Настраивает доставку событий бота через Webhook
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleQueryResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequestBody'
+    delete:
+      operationId: unsubscribe
+      summary: Отписка от обновлений о новых событиях через Webhook
+      description: Отписывает бота от получения обновлений о новых событиях через Webhook
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: URL, который нужно удалить из подписок на WebHook
+          schema:
+            type: string
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleQueryResult'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - subscriptions
+  /updates:
+    get:
+      operationId: getUpdates
+      summary: Получение обновлений о событиях через Long Polling
+      description: Получение обновлений о событиях через Long Polling
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное количество обновлений о событиях, которое может вернуться в ответе на запрос
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          explode: false
+        - name: timeout
+          in: query
+          required: false
+          description: Тайм-аут в секундах для долгого опроса
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 90
+            default: 30
+          explode: false
+        - name: marker
+          in: query
+          required: false
+          description: Чтобы получить последнее обновление событий, передайте `null` или оставьте поле пустым. Чтобы получить все обновления по событиям с момента предыдущего запроса, передайте значение `marker`, которое получили в ответ на предыдущий запрос
+          schema:
+            type: integer
+            format: int64
+            nullable: true
+          explode: false
+        - name: types
+          in: query
+          required: false
+          description: 'Список типов событий, которые вы хотите получать, например: `message_created`, `message_callback`'
+          schema:
+            type: array
+            items:
+              type: string
+            nullable: true
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateList'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '405':
+          description: Метод не разрешён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - subscriptions
+  /uploads:
+    post:
+      operationId: getUploadUrl
+      summary: Загрузка медиафайлов
+      description: |-
+        Метод возвращает URL для загрузки медиафайла и токен для передачи
+        загруженного файла во вложении к сообщению в чате или канале
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: 'Тип загружаемого файла. Возможные значения: `"image"`, `"video"`, `"audio"`, `"file"`'
+          schema:
+            $ref: '#/components/schemas/UploadType'
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadEndpoint'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - upload
+        - bot-sending
+  /videos/{videoToken}:
+    get:
+      operationId: getVideoAttachmentDetails
+      summary: Получить информацию о видео
+      description: Возвращает подробную информацию о прикреплённом видео, URL-адреса воспроизведения и дополнительные метаданные
+      parameters:
+        - name: videoToken
+          in: path
+          required: true
+          description: Токен видео-вложения
+          schema:
+            type: string
+            pattern: '[a-zA-Z0-9_\-]+'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoAttachmentDetails'
+        '401':
+          description: 'Ошибка авторизации: не предоставлен или недействителен access_token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Ошибка доступа: нет прав на этот ресурс'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Запрашиваемый ресурс не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      tags:
+        - messages
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+components:
+  schemas:
+    ActionRequestBody:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          allOf:
+            - $ref: '#/components/schemas/SenderAction'
+          description: Действие, отправляемое участникам чата
+      description: Тело запроса на отправку действия отправителя (индикатор набора текста и т. п.)
+    Attachment:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          description: Тип вложения
+      discriminator:
+        propertyName: type
+        mapping:
+          image: '#/components/schemas/PhotoAttachment'
+          video: '#/components/schemas/VideoAttachment'
+          audio: '#/components/schemas/AudioAttachment'
+          file: '#/components/schemas/FileAttachment'
+          sticker: '#/components/schemas/StickerAttachment'
+          contact: '#/components/schemas/ContactAttachment'
+          inline_keyboard: '#/components/schemas/InlineKeyboardAttachment'
+          share: '#/components/schemas/ShareAttachment'
+          location: '#/components/schemas/LocationAttachment'
+          data: '#/components/schemas/DataAttachment'
+          reply_keyboard: '#/components/schemas/ReplyKeyboardAttachment'
+      description: Общая схема, представляющая вложение сообщения
+    AttachmentPayload:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: |-
+            URL медиа-вложения. Этот URL будет получен в объекте Update после
+            отправки сообщения в чат.
+
+            Прямую ссылку на видео также можно получить с помощью метода
+            `GET /videos/{-videoToken-}`
+      description: Базовая полезная нагрузка медиа-вложения
+    AttachmentRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          description: Тип вложения
+      discriminator:
+        propertyName: type
+        mapping:
+          image: '#/components/schemas/PhotoAttachmentRequest'
+          video: '#/components/schemas/VideoAttachmentRequest'
+          audio: '#/components/schemas/AudioAttachmentRequest'
+          file: '#/components/schemas/FileAttachmentRequest'
+          sticker: '#/components/schemas/StickerAttachmentRequest'
+          contact: '#/components/schemas/ContactAttachmentRequest'
+          inline_keyboard: '#/components/schemas/InlineKeyboardAttachmentRequest'
+          reply_keyboard: '#/components/schemas/ReplyKeyboardAttachmentRequest'
+          location: '#/components/schemas/LocationAttachmentRequest'
+          share: '#/components/schemas/ShareAttachmentRequest'
+      description: Запрос на прикрепление данных к сообщению
+    AudioAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - audio
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MediaAttachmentPayload'
+          description: Полезная нагрузка аудио-вложения
+        transcription:
+          type: string
+          nullable: true
+          description: Аудио транскрипция
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение аудио
+    AudioAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - audio
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/UploadedInfo'
+          description: Полезная нагрузка запроса на прикрепление аудио
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление аудио к сообщению. Должен быть единственным вложением в сообщении
+    BotAddedToChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_added
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, куда был добавлен бот. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, добавивший бота в чат
+        is_channel:
+          type: boolean
+          description: Указывает, что бот добавлен в канал, а не в чат
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только бот будет добавлен в чат или канал
+    BotCommand:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Название команды
+        description:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 128
+          description: Описание команды
+      description: Команда, поддерживаемая ботом
+    BotCommandsInfo:
+      type: object
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/BotCommand'
+          maxItems: 32
+          description: Команды, которые поддерживает бот
+      description: Информация о командах бота
+    BotCommandsPatch:
+      type: object
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/BotCommand'
+          maxItems: 32
+          description: Команды, которые поддерживает бот
+      description: Объект PATCH для обновления команд бота
+    BotInfo:
+      type: object
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/BotCommand'
+          nullable: true
+          maxItems: 32
+          description: Команды, поддерживаемые ботом
+      allOf:
+        - $ref: '#/components/schemas/UserWithPhoto'
+      description: Объект включает общую информацию о боте, URL аватара и описание. Является наследником схемы UserWithPhoto. Дополнительно к ней содержит список команд, поддерживаемых ботом. Возвращается только при вызове метода `GET /me`
+    BotPatch:
+      type: object
+      properties:
+        first_name:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 64
+          description: Отображаемое имя пользователя или название бота
+        last_name:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 64
+          description: Отображаемое второе имя бота
+        name:
+          type: string
+          nullable: true
+          description: Поле устарело, скоро будет удалено. Используйте `first_name`
+          deprecated: true
+        description:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 16000
+          description: Описание бота
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/BotCommand'
+          nullable: true
+          maxItems: 32
+          description: Команды, поддерживаемые ботом. Чтобы удалить все команды, передайте пустой список
+        photo:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/PhotoAttachmentRequestPayload'
+          nullable: true
+          description: Запрос на установку фото бота
+      description: Параметры изменения свойств бота
+    BotRemovedFromChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_removed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, откуда был удалён бот. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, удаливший бота из чата
+        is_channel:
+          type: boolean
+          description: Указывает, что бот удалён из канала, а не из чата
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только бот будет удалён из чата
+    BotStartedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_started
+        chat_id:
+          type: integer
+          format: int64
+          description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который нажал кнопку `Start`
+        payload:
+          type: string
+          nullable: true
+          maxLength: 512
+          description: Дополнительные данные из диплинков, переданные при запуске бота
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: |-
+        Вы получите это событие, как только пользователь начнёт или возобновит
+        общение с ботом: нажмёт соответствующую кнопку в настройках бота в МАКС
+    BotStoppedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_stopped
+        chat_id:
+          type: integer
+          format: int64
+          description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который остановил бота
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только пользователь остановит бота в его настройках в МАКС
+    Button:
+      type: object
+      required:
+        - text
+        - type
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4'
+        type:
+          type: string
+          description: Discriminator property for Button.
+      discriminator:
+        propertyName: type
+        mapping:
+          callback: '#/components/schemas/CallbackButton'
+          link: '#/components/schemas/LinkButton'
+          request_geo_location: '#/components/schemas/RequestGeoLocationButton'
+          request_contact: '#/components/schemas/RequestContactButton'
+          chat: '#/components/schemas/ChatButton'
+          open_app: '#/components/schemas/OpenAppButton'
+          clipboard: '#/components/schemas/ClipboardButton'
+          message: '#/components/schemas/MessageButton'
+      description: Кнопка клавиатуры
+    Callback:
+      type: object
+      required:
+        - timestamp
+        - callback_id
+        - user
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix-время, когда пользователь нажал кнопку
+        callback_id:
+          type: string
+          description: Текущий ID клавиатуры
+        payload:
+          type: string
+          description: Токен кнопки
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, нажавший на кнопку
+      description: Объект, отправленный боту, когда пользователь нажимает кнопку
+    CallbackAnswer:
+      type: object
+      properties:
+        message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/NewMessageBody'
+          nullable: true
+          description: Заполните это, если хотите изменить текущее сообщение
+      description: Отправьте этот объект, когда ваш бот хочет отреагировать на нажатие кнопки
+    CallbackButton:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - callback
+        payload:
+          type: string
+          maxLength: 1024
+          description: Токен кнопки
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: После нажатия на такую кнопку клиент отправляет на сервер полезную нагрузку
+    Chat:
+      type: object
+      required:
+        - chat_id
+        - type
+        - status
+        - title
+        - icon
+        - last_event_time
+        - participants_count
+        - is_public
+        - description
+      properties:
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата или канала — в зависимости от ограничений метода и от того, с чем вы работаете. Как получить ID — в разделе «Получение chat_id»
+        type:
+          allOf:
+            - $ref: '#/components/schemas/ChatType'
+          description: 'Тип чата: `"chat"` — Групповой чат, `"channel"` — Канал, `"dialog"` — Диалог'
+        status:
+          allOf:
+            - $ref: '#/components/schemas/ChatStatus'
+          description: 'Статус чата: `"active"` — Бот является активным участником чата, `"removed"` — Бот был удалён из чата, `"left"` — Бот покинул чат, `"closed"` — Чат был закрыт'
+        title:
+          type: string
+          nullable: true
+          description: Отображаемое название чата или канала. Может быть `null` для диалогов
+        icon:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/Image'
+          nullable: true
+          description: Иконка чата или канала
+        last_event_time:
+          type: integer
+          format: int64
+          description: Время последнего события в чате или канале
+        participants_count:
+          type: integer
+          format: int32
+          description: Количество участников чата или канала. Для диалогов всегда `2`
+        owner_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID владельца чата или канала
+        participants:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          nullable: true
+          description: Участники чата или канала с временем последней активности. Может быть `null`, если запрашивается список чатов
+        is_public:
+          type: boolean
+          description: Доступен ли чат публично (для диалогов всегда `false`)
+        link:
+          type: string
+          nullable: true
+          description: Ссылка на чат
+        description:
+          type: string
+          nullable: true
+          description: Описание чата или канала
+        dialog_with_user:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/UserWithPhoto'
+          nullable: true
+          description: Данные о пользователе в диалоге (только для чатов типа `"dialog"`)
+        messages_count:
+          type: integer
+          nullable: true
+          description: Количество сообщений в групповых чатах и каналах
+        pinned_message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/Message'
+          nullable: true
+          description: Закреплённое сообщение в чате (возвращается только при запросе конкретного чата или канала)
+      description: |-
+        Объект содержит общую информацию о групповом чате или канале: его тип,
+        настройки отображения (название, аватар, описание, ссылка), публичную
+        доступность, а также информацию об участниках (владельце, боте и других
+        пользователях), времени их последней активности и событиях
+    ChatAdmin:
+      type: object
+      required:
+        - user_id
+        - permissions
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: Идентификатор пользователя-участника группового чата или канала, который назначается администратором. Максимум — 50 администраторов в чате
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAdminPermission'
+          description: |-
+            Перечень прав доступа пользователя или бота, который назначается
+            администратором группового чата или канала. Если право назначается
+            действующему администратору, то его текущие права будут обновлены в
+            соответствии с переданным списком
+        alias:
+          type: string
+          description: |-
+            Описание роли, которое будет отображаться на клиентском устройстве в
+            настройках чата или канала рядом с именем пользователя
+      description: Назначить администратора группового чата или канала
+    ChatAdminPermission:
+      type: string
+      enum:
+        - read_all_messages
+        - add_remove_members
+        - add_admins
+        - change_chat_info
+        - pin_message
+        - write
+        - can_call
+        - edit_link
+        - post_edit_delete_message
+        - edit_message
+        - delete_message
+        - edit
+        - delete
+      description: Права администратора группового чата или канала
+    ChatAdminsList:
+      type: object
+      required:
+        - admins
+      properties:
+        admins:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAdmin'
+          description: Список пользователей и ботов, которые получат права администратора группового чата или канала
+        marker:
+          type: integer
+          format: int64
+          nullable: true
+          description: Указатель на следующую страницу данных
+      description: Пагинированный список администраторов группового чата или канала
+    ChatButton:
+      type: object
+      required:
+        - type
+        - chat_title
+      properties:
+        type:
+          type: string
+          enum:
+            - chat
+        chat_title:
+          type: string
+          maxLength: 200
+          description: Название чата, который будет создан
+        chat_description:
+          type: string
+          nullable: true
+          maxLength: 400
+          description: Описание чата
+        start_payload:
+          type: string
+          nullable: true
+          maxLength: 512
+          description: Стартовая полезная нагрузка будет отправлена боту, как только чат будет создан
+        uuid:
+          type: integer
+          nullable: true
+          description: |-
+            Уникальный ID кнопки среди всех кнопок чата на клавиатуре.
+            Если `uuid` изменён, новый чат будет создан при следующем нажатии.
+            Сервер сгенерирует его в момент, когда кнопка будет впервые размещена.
+            Используйте его при редактировании сообщения.
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: |-
+        Кнопка, которая создает новый чат, как только первый пользователь на нее нажмёт.
+        Бот будет добавлен в участники чата как администратор.
+        Автор сообщения станет владельцем чата.
+
+        В оригинальной схеме отсутствует в `Button.discriminator.mapping` — см.
+        DEVIATIONS `mapping[chat]` в scripts/compare.py: литерал "chat" выведен по
+        конвенции соседних ключей (тот же приём, что и для `DataAttachment`).
+    ChatList:
+      type: object
+      required:
+        - chats
+        - marker
+      properties:
+        chats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Chat'
+          description: Список запрашиваемых чатов
+        marker:
+          type: integer
+          format: int64
+          nullable: true
+          description: Указатель на следующую страницу запрашиваемых чатов
+      description: Пагинированный список чатов
+    ChatMember:
+      type: object
+      required:
+        - last_access_time
+        - is_owner
+        - is_admin
+        - join_time
+        - permissions
+      properties:
+        last_access_time:
+          type: integer
+          format: int64
+          description: Время последней активности пользователя в чате. Может быть устаревшим для суперчатов (равно времени вступления)
+        is_owner:
+          type: boolean
+          description: Является ли пользователь владельцем группового чата или канала
+        is_admin:
+          type: boolean
+          description: Является ли пользователь администратором группового чата или канала
+        join_time:
+          type: integer
+          format: int64
+          description: Дата присоединения к чату в формате Unix time
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAdminPermission'
+          nullable: true
+          description: |-
+            Перечень прав доступа пользователя или бота, если тот является
+            администратором группового чата или канала. Для обычных участников чата
+            или канала поле не возвращается
+        alias:
+          type: string
+          description: |-
+            Описание роли, которое будет отображаться на клиентском устройстве в
+            настройках чата или канала рядом с именем пользователя
+      allOf:
+        - $ref: '#/components/schemas/UserWithPhoto'
+      description: |-
+        Объект включает общую информацию о пользователе или боте, URL аватара и
+        описание (при наличии). Является наследником схемы UserWithPhoto.
+        Дополнительно к ней содержит данные для пользователей-участников чата или
+        канала. Возвращается только при вызове некоторых методов группы `/chats`
+    ChatMembersList:
+      type: object
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMember'
+          description: |-
+            Список участников группового чата или канала с общей информацией о них,
+            а также временем последней активности и списком прав доступа для
+            пользователей и ботов, которые являются администраторами
+        marker:
+          type: integer
+          format: int64
+          nullable: true
+          description: Указатель на следующую страницу данных
+      description: Пагинированный список участников группового чата или канала
+    ChatPatch:
+      type: object
+      properties:
+        icon:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/PhotoAttachmentRequestPayload'
+          nullable: true
+          description: Запрос на изменение иконки чата или канала
+        title:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+          description: Отображаемое название чата или канала
+        pin:
+          type: string
+          nullable: true
+          description: ID сообщения для закрепления в чате. Чтобы удалить закреплённое сообщение, используйте метод unpin
+        notify:
+          type: boolean
+          nullable: true
+          description: Если `true`, участники получат системное уведомление об изменении
+          default: true
+      description: Параметры изменения свойств чата или канала
+    ChatStatus:
+      type: string
+      enum:
+        - active
+        - removed
+        - left
+        - closed
+      description: Статус чата для текущего бота
+    ChatTitleChangedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - title
+      properties:
+        update_type:
+          type: string
+          enum:
+            - chat_title_changed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который изменил название
+        title:
+          type: string
+          description: Новое название
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только будет изменено название чата
+    ChatType:
+      type: string
+      enum:
+        - chat
+      description: 'Тип чата: диалог, чат'
+    ClipboardButton:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - clipboard
+        payload:
+          type: string
+          maxLength: 1024
+          description: Текст, который будет скопирован
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: При нажатии на кнопку с типом `clipboard` текст, указанный в свойстве `payload`, копируется в буфер обмена
+    ContactAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - contact
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/ContactAttachmentPayload'
+          description: Полезная нагрузка вложения-контакта
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение с карточкой контакта
+    ContactAttachmentPayload:
+      type: object
+      properties:
+        vcf_info:
+          type: string
+          nullable: true
+          description: Информация о пользователе в формате VCF
+        hash:
+          type: string
+          nullable: true
+          description: |-
+            Хеш информации о пользователе в формате VCF. Используется для проверки
+            того, что пользователь поделился номером телефона, привязанным к его
+            аккаунту в МАКС. Подробнее — в разделе «Типы кнопок»
+        max_info:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/User'
+          nullable: true
+          description: Информация о пользователе
+      description: Полезная нагрузка вложения-контакта
+    ContactAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - contact
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/ContactAttachmentRequestPayload'
+          description: Полезная нагрузка запроса на прикрепление карточки контакта
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление карточки контакта к сообщению. Должен быть единственным вложением в сообщении
+    ContactAttachmentRequestPayload:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Имя контакта
+        contact_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID контакта, если он зарегистрирован в MAX
+        vcf_info:
+          type: string
+          nullable: true
+          description: Полная информация о контакте в формате VCF
+        vcf_phone:
+          type: string
+          nullable: true
+          description: Телефон контакта в формате VCF
+      description: Полезная нагрузка запроса на прикрепление карточки контакта
+    DataAttachment:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          enum:
+            - data
+        data:
+          type: string
+          description: Полезная нагрузка, отправленная через SendMessageButton
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: |-
+        Вложение, содержащее полезную нагрузку, отправленную через `SendMessageButton`.
+
+        В оригинальной схеме отсутствует в `Attachment.discriminator.mapping` —
+        см. DEVIATIONS `mapping[data]` в scripts/compare.py (тот же приём, что и
+        для `ChatButton`).
+    DialogClearedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_cleared
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который очистил историю сообщений
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только пользователь очистит историю сообщений
+    DialogMutedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - muted_until
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_muted
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который отключил уведомления
+        muted_until:
+          type: integer
+          format: int64
+          description: Время в формате Unix, до наступления которого диалог был отключён
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: |-
+        Вы получите это событие, как только пользователь отключит уведомления о
+        новых сообщениях в диалоге с ботом
+    DialogRemovedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_removed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который удалил чат
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только пользователь удалит чат
+    DialogUnmutedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_unmuted
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, который включил уведомления
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: |-
+        Вы получите это событие, как только пользователь включит уведомления о
+        новых сообщениях в диалоге с ботом
+    EmphasizedMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - emphasized
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет *курсив*
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        error:
+          type: string
+          description: Ошибка
+        code:
+          type: string
+          description: Код ошибки
+        message:
+          type: string
+          description: Читаемое описание ошибки
+      description: Сервер возвращает это, если возникло исключение при вашем запросе
+    FailedUserDetails:
+      type: object
+      required:
+        - error_code
+        - user_ids
+      properties:
+        error_code:
+          type: string
+          description: |-
+            Код ошибки. Возможные значения: `add.participant.privacy` — ошибки
+            конфиденциальности при добавлении пользователей; `add.participant.not.found`
+            — пользователи не найдены
+        user_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: ID пользователей с данной ошибкой
+      description: Подробное описание, почему пользователь не был добавлен в групповой чат или канал
+    FileAttachment:
+      type: object
+      required:
+        - type
+        - payload
+        - filename
+        - size
+      properties:
+        type:
+          type: string
+          enum:
+            - file
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/FileAttachmentPayload'
+          description: Полезная нагрузка файлового вложения
+        filename:
+          type: string
+          description: Имя загруженного файла
+        size:
+          type: integer
+          format: int64
+          description: Размер файла в байтах
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение файла
+    FileAttachmentPayload:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении
+      allOf:
+        - $ref: '#/components/schemas/AttachmentPayload'
+      description: Полезная нагрузка файлового вложения
+    FileAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - file
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/UploadedInfo'
+          description: Полезная нагрузка запроса на прикрепление файла
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление файла к сообщению. Должен быть единственным вложением в сообщении
+    GetPinnedMessageResult:
+      type: object
+      properties:
+        message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/Message'
+          nullable: true
+          description: Закреплённое сообщение. Может быть `null`, если в чате нет закреплённого сообщения
+      description: Результат запроса закреплённого сообщения
+    GetSubscriptionsResult:
+      type: object
+      required:
+        - subscriptions
+      properties:
+        subscriptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subscription'
+          description: Список текущих подписок
+      description: Список всех WebHook подписок
+    HeadingMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - heading
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет заголовок
+    HighlightedMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - highlighted
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет выделенный текст
+    Image:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: URL изображения
+      description: Общая схема, описывающая объект изображения
+    InlineKeyboardAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - inline_keyboard
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/Keyboard'
+          description: Полезная нагрузка клавиатуры
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Кнопки в сообщении
+    InlineKeyboardAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - inline_keyboard
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/InlineKeyboardAttachmentRequestPayload'
+          description: Полезная нагрузка запроса на прикрепление клавиатуры
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление клавиатуры к сообщению
+    InlineKeyboardAttachmentRequestPayload:
+      type: object
+      required:
+        - buttons
+      properties:
+        buttons:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Button'
+          minItems: 1
+          description: Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
+      description: Полезная нагрузка запроса на прикрепление клавиатуры
+    Intent:
+      type: string
+      enum:
+        - positive
+        - negative
+        - default
+      description: Намерение кнопки
+    Keyboard:
+      type: object
+      required:
+        - buttons
+      properties:
+        buttons:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Button'
+          description: Массив рядов с кнопками
+      description: Клавиатура — это двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
+    LinkButton:
+      type: object
+      required:
+        - type
+        - url
+      properties:
+        type:
+          type: string
+          enum:
+            - link
+        url:
+          type: string
+          maxLength: 2048
+          description: Ссылка
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: После нажатия на такую кнопку пользователь переходит по ссылке, которую она содержит
+    LinkMarkup:
+      type: object
+      required:
+        - type
+        - url
+      properties:
+        type:
+          type: string
+          enum:
+            - link
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: URL ссылки
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет ссылку в тексте
+    LinkedMessage:
+      type: object
+      required:
+        - type
+        - message
+      properties:
+        type:
+          allOf:
+            - $ref: '#/components/schemas/MessageLinkType'
+          description: Тип связанного сообщения
+        sender:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, отправивший сообщение
+        chat_id:
+          type: integer
+          format: int64
+          description: Чат, в котором сообщение было изначально опубликовано. Только для пересланных сообщений. Как получить ID — в разделе «Получение chat_id»
+        message:
+          allOf:
+            - $ref: '#/components/schemas/MessageBody'
+          description: Содержимое связанного (пересланного или ответного) сообщения
+      description: Пересланное или ответное сообщение
+    LocationAttachment:
+      type: object
+      required:
+        - type
+        - latitude
+        - longitude
+      properties:
+        type:
+          type: string
+          enum:
+            - location
+        latitude:
+          type: number
+          format: double
+          description: Широта
+        longitude:
+          type: number
+          format: double
+          description: Долгота
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение географического положения
+    LocationAttachmentRequest:
+      type: object
+      required:
+        - type
+        - latitude
+        - longitude
+      properties:
+        type:
+          type: string
+          enum:
+            - location
+        latitude:
+          type: number
+          format: double
+          description: Широта
+        longitude:
+          type: number
+          format: double
+          description: Долгота
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление вложения географического положения
+    MarkupElement:
+      type: object
+      required:
+        - from
+        - length
+        - type
+      properties:
+        from:
+          type: integer
+          format: int32
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          description: Длина элемента разметки
+        type:
+          type: string
+          description: Discriminator property for MarkupElement.
+      discriminator:
+        propertyName: type
+        mapping:
+          strong: '#/components/schemas/StrongMarkup'
+          emphasized: '#/components/schemas/EmphasizedMarkup'
+          monospaced: '#/components/schemas/MonospacedMarkup'
+          link: '#/components/schemas/LinkMarkup'
+          strikethrough: '#/components/schemas/StrikethroughMarkup'
+          underline: '#/components/schemas/UnderlineMarkup'
+          user_mention: '#/components/schemas/UserMentionMarkup'
+          heading: '#/components/schemas/HeadingMarkup'
+          highlighted: '#/components/schemas/HighlightedMarkup'
+          quote: '#/components/schemas/QuoteMarkup'
+      description: Элемент разметки текста сообщения
+    MediaAttachmentPayload:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении
+      allOf:
+        - $ref: '#/components/schemas/AttachmentPayload'
+      description: Полезная нагрузка медиа-вложения (видео/аудио)
+    Message:
+      type: object
+      required:
+        - recipient
+        - timestamp
+        - body
+      properties:
+        sender:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, отправивший сообщение
+        recipient:
+          allOf:
+            - $ref: '#/components/schemas/Recipient'
+          description: Получатель сообщения. Может быть пользователем или чатом
+        timestamp:
+          type: integer
+          format: int64
+          description: Время создания сообщения в формате Unix-time
+        link:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/LinkedMessage'
+          nullable: true
+          description: Пересланное или ответное сообщение
+        body:
+          allOf:
+            - $ref: '#/components/schemas/MessageBody'
+          description: Содержимое сообщения. Текст + вложения. Может быть `null`, если сообщение содержит только пересланное сообщение
+        stat:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MessageStat'
+          nullable: true
+          description: Статистика сообщения. Возвращается только для постов в каналах
+        url:
+          type: string
+          nullable: true
+          description: Публичная ссылка на пост в канале. Отсутствует для диалогов и групповых чатов
+      description: Сообщение в чате
+    MessageBody:
+      type: object
+      required:
+        - mid
+        - seq
+        - text
+      properties:
+        mid:
+          type: string
+          description: Уникальный ID сообщения
+        seq:
+          type: integer
+          format: int64
+          description: ID последовательности сообщения в чате
+        text:
+          type: string
+          nullable: true
+          description: Новый текст сообщения
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+          nullable: true
+          description: Вложения сообщения. Могут быть одним из типов `Attachment`. Смотрите описание схемы
+        markup:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarkupElement'
+          nullable: true
+          description: Разметка текста сообщения. Для подробной информации загляните в раздел [Форматирование](/docs-api#Форматирование%20текста%20в%20сообщениях)
+      description: Схема, представляющая тело сообщения
+    MessageButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - message
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: Кнопка, при нажатии на которую от лица пользователя в чат отправляется указанный текст
+    MessageCallbackUpdate:
+      type: object
+      required:
+        - update_type
+        - callback
+        - message
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_callback
+        callback:
+          allOf:
+            - $ref: '#/components/schemas/Callback'
+          description: Нажатая пользователем кнопка
+        message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/Message'
+          nullable: true
+          description: |-
+            Изначальное сообщение, содержащее встроенную клавиатуру. Может быть
+            `null`, если оно было удалено к моменту, когда бот получил это событие
+        user_locale:
+          type: string
+          nullable: true
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только пользователь нажмёт кнопку
+    MessageChatCreatedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat
+        - message_id
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_chat_created
+        chat:
+          allOf:
+            - $ref: '#/components/schemas/Chat'
+          description: Созданный чат
+        message_id:
+          type: string
+          description: ID сообщения, где была нажата кнопка
+        start_payload:
+          type: string
+          nullable: true
+          description: Полезная нагрузка от кнопки чата
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: |-
+        Вы получите это событие, как только пользователь нажмёт в сообщении на
+        кнопку с типом `chat` и будет создан новый чат с ботом, связанный с этим
+        сообщением с кнопкой.
+
+        KNOWN: в оригинальной схеме этот дискриминатор отсутствует в
+        `Update.discriminator.mapping` (недосмотр оригинала) — см. DEVIATIONS
+        `message_chat_created` в scripts/compare.py.
+    MessageCreatedUpdate:
+      type: object
+      required:
+        - update_type
+        - message
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_created
+        message:
+          allOf:
+            - $ref: '#/components/schemas/Message'
+          description: Новое созданное сообщение
+        user_locale:
+          type: string
+          nullable: true
+          description: Текущий язык пользователя в формате IETF BCP 47. Доступно только в диалогах
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только сообщение будет создано
+    MessageEditedUpdate:
+      type: object
+      required:
+        - update_type
+        - message
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_edited
+        message:
+          allOf:
+            - $ref: '#/components/schemas/Message'
+          description: Отредактированное сообщение
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только пользователь отредактирует сообщение
+    MessageLinkType:
+      type: string
+      enum:
+        - forward
+        - reply
+      description: Тип связанного сообщения
+    MessageList:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          description: Массив сообщений
+      description: Пагинированный список сообщений
+    MessageRemovedUpdate:
+      type: object
+      required:
+        - update_type
+        - message_id
+        - chat_id
+        - user_id
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_removed
+        message_id:
+          type: string
+          description: ID удалённого сообщения
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где сообщение было удалено. Как получить ID — в разделе «Получение chat_id»
+        user_id:
+          type: integer
+          format: int64
+          description: Пользователь, удаливший сообщение
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: Вы получите это событие, как только сообщение будет удалено
+    MessageStat:
+      type: object
+      required:
+        - views
+      properties:
+        views:
+          type: integer
+          description: Количество пользователей, которые увидели пост в канале. Просмотр засчитывается, когда пост попадает в область видимости экрана
+      description: Статистика сообщения. Возвращается только для постов в каналах
+    ModifyMembersResult:
+      type: object
+      properties:
+        failed_user_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          nullable: true
+          description: ID пользователей, которых не удалось добавить в групповой чат
+        failed_user_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailedUserDetails'
+          nullable: true
+          description: Подробное объяснение, почему пользователь не был добавлен в групповой чат
+      allOf:
+        - $ref: '#/components/schemas/SimpleQueryResult'
+      description: Результат запроса на изменение списка участников
+    MonospacedMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - monospaced
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет `моноширинный` или блок ```код``` в тексте
+    NewMessageBody:
+      type: object
+      required:
+        - text
+        - attachments
+        - link
+      properties:
+        text:
+          type: string
+          nullable: true
+          maxLength: 4000
+          description: Новый текст сообщения
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentRequest'
+          nullable: true
+          description: Вложения сообщения. Если поле равно `null`, изменений не произойдет. Если пусто, все вложения будут удалены
+        link:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/NewMessageLink'
+          nullable: true
+          description: Ссылка на сообщение
+        notify:
+          type: boolean
+          description: Если false, участники чата не будут уведомлены (по умолчанию `true`)
+          default: true
+        format:
+          allOf:
+            - $ref: '#/components/schemas/TextFormat'
+          nullable: true
+          description: Если установлен, текст сообщения будет форматирован данным способом. Для подробной информации загляните в раздел [Форматирование](/docs-api#Форматирование%20текста%20в%20сообщениях)
+      description: Новое сообщение, отправляемое ботом
+    NewMessageLink:
+      type: object
+      required:
+        - type
+        - mid
+      properties:
+        type:
+          allOf:
+            - $ref: '#/components/schemas/MessageLinkType'
+          description: Тип ссылки сообщения
+        mid:
+          type: string
+          description: ID исходного сообщения
+      description: Ссылка на сообщение, которое нужно переслать или на которое нужно ответить
+    OpenAppButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - open_app
+        web_app:
+          type: string
+          description: Публичное имя (username) бота или ссылка на него, чьё мини-приложение надо запустить
+        contact_id:
+          type: integer
+          format: int64
+          description: Идентификатор бота, чьё мини-приложение надо запустить
+        payload:
+          type: string
+          description: Параметр запуска, который будет передан в initData мини-приложения
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: Кнопка для запуска мини-приложения
+    PhotoAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - image
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/PhotoAttachmentPayload'
+          description: Полезная нагрузка фото-вложения
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение изображения
+    PhotoAttachmentPayload:
+      type: object
+      required:
+        - photo_id
+        - token
+        - url
+      properties:
+        photo_id:
+          type: integer
+          format: int64
+          description: Уникальный ID этого изображения
+        token:
+          type: string
+          description: Токен вложения
+        url:
+          type: string
+          description: 'URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте'
+      description: Полезная нагрузка фото-вложения
+    PhotoAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - image
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/PhotoAttachmentRequestPayload'
+          description: Полезная нагрузка запроса на прикрепление изображения
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление изображения к сообщению
+    PhotoAttachmentRequestPayload:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+          minLength: 1
+          description: Любой внешний URL изображения, которое вы хотите прикрепить
+        token:
+          type: string
+          nullable: true
+          description: Токен существующего вложения
+        photos:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PhotoToken'
+          nullable: true
+          description: Токены, полученные после загрузки изображений
+      description: Запрос на прикрепление изображения (все поля являются взаимоисключающими)
+    PhotoToken:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Закодированная информация загруженного изображения
+      description: Токен, полученный после загрузки изображения
+    PhotoTokens:
+      type: object
+      required:
+        - photos
+      properties:
+        photos:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PhotoToken'
+          description: Токены загруженных изображений
+      description: Это информация, которую вы получите, как только изображение будет загружено
+    PinMessageBody:
+      type: object
+      required:
+        - message_id
+      properties:
+        message_id:
+          type: string
+          description: ID сообщения, которое нужно закрепить. Соответствует полю `Message.body.mid`
+        notify:
+          type: boolean
+          nullable: true
+          description: Если `true`, участники получат уведомление с системным сообщением о закреплении
+          default: true
+      description: Тело запроса на закрепление сообщения в чате
+    QuoteMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - quote
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет цитату
+    Recipient:
+      type: object
+      required:
+        - chat_id
+        - chat_type
+        - user_id
+      properties:
+        chat_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID чата. Как получить ID — в разделе «Получение chat_id»
+        chat_type:
+          allOf:
+            - $ref: '#/components/schemas/ChatType'
+          description: Тип чата
+        user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID пользователя, если сообщение было отправлено пользователю
+      description: Новый получатель сообщения. Может быть пользователем или чатом
+    ReplyButton:
+      type: object
+      required:
+        - text
+        - type
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Видимый текст кнопки
+        payload:
+          type: string
+          nullable: true
+          maxLength: 1024
+          description: Токен кнопки
+        type:
+          type: string
+          description: Discriminator property for ReplyButton.
+      discriminator:
+        propertyName: type
+        mapping:
+          message: '#/components/schemas/SendMessageButton'
+          user_geo_location: '#/components/schemas/SendGeoLocationButton'
+          user_contact: '#/components/schemas/SendContactButton'
+      description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
+    ReplyKeyboardAttachment:
+      type: object
+      required:
+        - type
+        - buttons
+      properties:
+        type:
+          type: string
+          enum:
+            - reply_keyboard
+        buttons:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ReplyButton'
+          description: Массив рядов с кнопками
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: |-
+        Пользовательская reply-клавиатура в сообщении.
+
+        В оригинальной схеме отсутствует в `Attachment.discriminator.mapping` —
+        см. DEVIATIONS `mapping[reply_keyboard]` в scripts/compare.py (тот же
+        приём, что и для `ChatButton`).
+    ReplyKeyboardAttachmentRequest:
+      type: object
+      required:
+        - type
+        - buttons
+      properties:
+        type:
+          type: string
+          enum:
+            - reply_keyboard
+        direct:
+          type: boolean
+          description: Применимо только для чатов. Если `true`, клавиатура будет показана только тому, кто упомянул или ответил боту
+          default: false
+        direct_user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Если задано, reply-клавиатура будет показана только этому участнику чата
+        buttons:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ReplyButton'
+          minItems: 1
+          description: Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: |-
+        Запрос на прикрепление reply-клавиатуры к сообщению.
+
+        В оригинальной схеме отсутствует в `AttachmentRequest.discriminator.mapping`
+        — см. DEVIATIONS `mapping[reply_keyboard]` в scripts/compare.py (тот же
+        приём, что и для `ChatButton`).
+    RequestContactButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - request_contact
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
+    RequestGeoLocationButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - request_geo_location
+        quick:
+          type: boolean
+          description: Если `true`, отправляет местоположение без запроса подтверждения пользователя
+          default: false
+      allOf:
+        - $ref: '#/components/schemas/Button'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
+    SendContactButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - user_contact
+      allOf:
+        - $ref: '#/components/schemas/ReplyButton'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
+    SendGeoLocationButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - user_geo_location
+        quick:
+          type: boolean
+          description: Если `true`, отправляет местоположение без запроса подтверждения пользователя
+          default: false
+      allOf:
+        - $ref: '#/components/schemas/ReplyButton'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
+    SendMessageButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - message
+      allOf:
+        - $ref: '#/components/schemas/ReplyButton'
+      description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
+    SendMessageResult:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          allOf:
+            - $ref: '#/components/schemas/Message'
+          description: Отправленное сообщение
+      description: Результат отправки сообщения
+    SenderAction:
+      type: string
+      enum:
+        - typing_on
+        - sending_photo
+        - sending_video
+        - sending_audio
+        - sending_file
+      description: |-
+        Действие, отправляемое участникам чата. Возможные значения:
+        - `"typing_on"` — Бот набирает сообщение
+        - `"sending_photo"` — Бот отправляет фото
+        - `"sending_video"` — Бот отправляет видео
+        - `"sending_audio"` — Бот отправляет аудиофайл
+        - `"sending_file"` — Бот отправляет файл
+    ShareAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - share
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/ShareAttachmentPayload'
+          description: Полезная нагрузка предпросмотра ссылки
+        title:
+          type: string
+          nullable: true
+          description: Заголовок предпросмотра ссылки
+        description:
+          type: string
+          nullable: true
+          description: Описание предпросмотра ссылки
+        image_url:
+          type: string
+          nullable: true
+          description: Изображение предпросмотра ссылки
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение с предпросмотром ссылки
+    ShareAttachmentPayload:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+          minLength: 1
+          description: URL, прикрепленный к сообщению в качестве предпросмотра медиа
+        token:
+          type: string
+          nullable: true
+          description: Токен вложения
+      description: Полезная нагрузка запроса ShareAttachmentRequest
+    ShareAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - share
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/ShareAttachmentPayload'
+          description: Полезная нагрузка запроса на прикрепление предпросмотра ссылки
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление предпросмотра медиафайла по внешнему URL
+    SimpleQueryResult:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: '`true`, если запрос был успешным, `false` — в противном случае'
+        message:
+          type: string
+          description: Объяснительное сообщение, если результат не был успешным
+      description: Простой ответ на запрос
+    StickerAttachment:
+      type: object
+      required:
+        - type
+        - payload
+        - width
+        - height
+      properties:
+        type:
+          type: string
+          enum:
+            - sticker
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/StickerAttachmentPayload'
+          description: Полезная нагрузка вложения-стикера
+        width:
+          type: integer
+          description: Ширина стикера
+        height:
+          type: integer
+          description: Высота стикера
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение стикера
+    StickerAttachmentPayload:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: ID стикера
+      allOf:
+        - $ref: '#/components/schemas/AttachmentPayload'
+      description: Полезная нагрузка вложения-стикера
+    StickerAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - sticker
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/StickerAttachmentRequestPayload'
+          description: Полезная нагрузка запроса на прикрепление стикера
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление стикера. Должен быть единственным вложением в сообщении
+    StickerAttachmentRequestPayload:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: Код стикера
+      description: Полезная нагрузка запроса на прикрепление стикера
+    StrikethroughMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - strikethrough
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет ~зачёркнутый~ текст
+    StrongMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - strong
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет **жирный** текст
+    Subscription:
+      type: object
+      required:
+        - url
+        - time
+        - update_types
+      properties:
+        url:
+          type: string
+          description: URL вебхука
+        time:
+          type: integer
+          format: int64
+          description: Unix-время, когда была создана подписка
+        update_types:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: |-
+            Типы событий, на которые подписан бот.
+
+            В оригинале элементы массива несут `minLength: 1` (см. DEVIATIONS
+            `Subscription.update_types\[\]` в scripts/compare.py) — перенос этого
+            ограничения через именованный scalar-тип создаёт в нашей схеме лишнюю
+            (не присутствующую в оригинале) схему `components.schemas`, поэтому мы
+            его не переносим и документируем как осознанное отличие.
+      description: Схема для описания подписки на WebHook
+    SubscriptionRequestBody:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: URL HTTPS-endpoint вашего бота. Должен начинаться с `https://`
+        update_types:
+          type: array
+          items:
+            type: string
+          description: Список типов событий, которые хочет получать ваш бот
+        secret:
+          type: string
+          minLength: 5
+          maxLength: 256
+          pattern: ^[a-zA-Z0-9_-]{5,256}$
+          description: |-
+            Секрет, который должен быть отправлен в заголовке `X-Max-Bot-Api-Secret`
+            в каждом запросе Webhook. Разрешены только символы `A-Z`, `a-z`, `0-9`,
+            и дефис. Заголовок рекомендован, чтобы запрос поступал из установленного
+            веб-узла
+      description: Запрос на настройку подписки WebHook
+    TextFormat:
+      type: string
+      enum:
+        - markdown
+        - html
+      description: Формат текста сообщения
+    UnderlineMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - underline
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет подчёркнутый текст
+    Update:
+      type: object
+      required:
+        - update_type
+        - timestamp
+      properties:
+        update_type:
+          type: string
+          description: Тип события
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix-время, когда произошло событие
+      discriminator:
+        propertyName: update_type
+        mapping:
+          message_created: '#/components/schemas/MessageCreatedUpdate'
+          message_callback: '#/components/schemas/MessageCallbackUpdate'
+          message_edited: '#/components/schemas/MessageEditedUpdate'
+          message_removed: '#/components/schemas/MessageRemovedUpdate'
+          bot_added: '#/components/schemas/BotAddedToChatUpdate'
+          bot_removed: '#/components/schemas/BotRemovedFromChatUpdate'
+          bot_started: '#/components/schemas/BotStartedUpdate'
+          bot_stopped: '#/components/schemas/BotStoppedUpdate'
+          chat_title_changed: '#/components/schemas/ChatTitleChangedUpdate'
+          dialog_cleared: '#/components/schemas/DialogClearedUpdate'
+          dialog_muted: '#/components/schemas/DialogMutedUpdate'
+          dialog_unmuted: '#/components/schemas/DialogUnmutedUpdate'
+          dialog_removed: '#/components/schemas/DialogRemovedUpdate'
+          user_added: '#/components/schemas/UserAddedToChatUpdate'
+          user_removed: '#/components/schemas/UserRemovedFromChatUpdate'
+          message_chat_created: '#/components/schemas/MessageChatCreatedUpdate'
+      description: |-
+        Объект `Update` описывает возможные события в чате или канале. Может
+        возвращаться в следующих случаях:
+        - вы подписались на обновления через Webhook — при наступлении события
+        МАКС пришлёт POST-запрос `/subscriptions`, который содержит объект `Update`;
+        - вы отправили GET-запрос `/updates` для получения обновлений через
+        Long Polling — в ответ вернётся объект `Update`.
+    UpdateList:
+      type: object
+      required:
+        - updates
+        - marker
+      properties:
+        updates:
+          type: array
+          items:
+            $ref: '#/components/schemas/Update'
+          description: Список обновлений о событиях в чатах и каналах, в которые добавлен бот
+        marker:
+          type: integer
+          format: int64
+          nullable: true
+          description: Указатель на следующую страницу данных
+      description: |-
+        Список обновлений о событиях в чатах и каналах, в которые добавлен бот.
+        Обратите внимание, чтобы получать события из групповых чатов и каналов,
+        бот должен быть администратором
+    UploadEndpoint:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: URL для загрузки медиафайла. Срок жизни ссылки не ограничен
+        token:
+          type: string
+          description: Токен для отправки медиафайла во вложении к сообщению с помощью POST /messages или PUT /messages
+      description: Точка доступа, куда следует загружать ваши бинарные файлы
+    UploadType:
+      type: string
+      enum:
+        - image
+        - video
+        - audio
+        - file
+      description: |-
+        Тип загружаемого медиафайла. Возможные значения и поддерживаемые форматы:
+        - `image` — изображение (JPG, JPEG, PNG, GIF, TIFF, BMP, HEIC). Максимальный
+        размер одного изображения: до 50 МБ или не более 7680 x 7680 px — должны
+        выполняться оба критерия
+        - `video` — видеофайл (MP4, MOV, MKV, WEBM). Максимальный размер одного
+        видео: до 250 МБ
+        - `audio` — аудиофайл (MP3, WAV, M4A и другие). Максимальный размер одного
+        аудио: до 256 МБ или длительностью не более 60 мин — должны выполняться
+        оба критерия
+        - `file` — файл, поддерживаются распространённые форматы (например, TXT,
+        DOC и другие). Максимальный размер одного файла: до 4 ГБ
+
+        При передаче неподдерживаемого типа файла вернётся ошибка
+        `File extension is forbidden`.
+
+        Значение `photo` больше не поддерживается. Если вы использовали
+        `type=photo` в ранее созданных интеграциях — замените его на `type=image`
+    UploadedInfo:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Токен — уникальный ID загруженного медиафайла
+      description: Это информация, которую вы получите, как только аудио/видео будет загружено
+    User:
+      type: object
+      # ПРАВКА МОКА (не апстрим): username убран из required — живой Max у
+      # пользователя без публичного имени поле не присылает, то есть нарушает
+      # эту спеку. Мок повторяет прод, а не контракт; подробности в
+      # internal/wire/wire.go у типа User. При обновлении спеки с апстрима
+      # правку нужно нанести заново.
+      required:
+        - user_id
+        - first_name
+        - is_bot
+        - last_activity_time
+        - name
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: Идентификатор пользователя или бота
+        first_name:
+          type: string
+          description: Отображаемое имя пользователя или бота
+        last_name:
+          type: string
+          nullable: true
+          description: Отображаемая фамилия пользователя. Для ботов это поле не возвращается
+        username:
+          type: string
+          nullable: true
+          description: Никнейм бота или уникальное публичное имя пользователя. В случае с пользователем может быть `null`, если тот недоступен или имя не задано
+        is_bot:
+          type: boolean
+          description: '`true`, если это бот'
+        last_activity_time:
+          type: integer
+          format: int64
+          description: Время последней активности пользователя или бота в MAX (Unix-время в миллисекундах). Если пользователь отключил в настройках профиля мессенджера MAX возможность видеть, что он в сети онлайн, поле может не возвращаться
+        name:
+          type: string
+          nullable: true
+          description: Устаревшее поле, скоро будет удалено
+      description: |-
+        Объект, описывающий один из вариантов наследования:
+
+        - `User` — объект содержит общую информацию о пользователе или боте без аватара
+        - `UserWithPhoto` — объект с общей информацией о пользователе или боте, дополнительно содержит URL аватара и описание
+        - `BotInfo` — объект включает общую информацию о боте, URL аватара и описание. Дополнительно содержит список команд, поддерживаемых ботом. Возвращается только при вызове метода `GET /me`
+        - `ChatMember` — объект включает общую информацию о пользователе или боте, URL аватара и описание при его наличии. Дополнительно содержит данные для пользователей-участников чата. Возвращается только при вызове некоторых методов группы `/chats`
+    UserAddedToChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - user_added
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, добавленный в чат
+        inviter_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |-
+            Пользователь, который добавил нового пользователя в чат. Может быть
+            `null`, если пользователь присоединился к чату по ссылке
+        is_channel:
+          type: boolean
+          description: Указывает, что пользователь добавлен в канал, а не в чат
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: |-
+        Вы получите это событие, как только пользователь будет добавлен в чат,
+        где бот является администратором
+    UserIdsList:
+      type: object
+      required:
+        - user_ids
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          maxItems: 100
+          description: Массив ID пользователей, которых вы хотите добавить в групповой чат. В одном запросе можно передать максимум 100 идентификаторов
+      description: |-
+        Список ID пользователей.
+
+        ОТЛИЧИЕ ОТ ОРИГИНАЛА (осознанное, см. DEVIATIONS в scripts/compare.py):
+        в оригинальной схеме `user_ids` описан как параметро-подобная структура
+        (name/required/schema/style) с maxItems, заданным строкой ("100") на
+        уровне items, а не массива — явный артефакт копипасты из описания
+        параметра запроса. Мы транскрибируем содержательный смысл: обычное
+        свойство-массив с ограничением на количество элементов.
+    UserMentionMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - user_mention
+        user_link:
+          type: string
+          nullable: true
+          description: '`@username` упомянутого пользователя'
+        user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID упомянутого пользователя без имени
+      allOf:
+        - $ref: '#/components/schemas/MarkupElement'
+      description: Представляет упоминание пользователя в тексте. Упоминание может быть как по имени пользователя, так и по ID, если у пользователя нет имени
+    UserRemovedFromChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - user_removed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          description: Пользователь, удалённый из чата
+        admin_id:
+          type: integer
+          format: int64
+          description: |-
+            Администратор, который удалил пользователя из чата. Может быть `null`,
+            если пользователь покинул чат сам
+        is_channel:
+          type: boolean
+          description: Указывает, что пользователь удалён из канала, а не из чата
+      allOf:
+        - $ref: '#/components/schemas/Update'
+      description: |-
+        Вы получите это событие, как только пользователь будет удалён из чата,
+        где бот является администратором
+    UserWithPhoto:
+      type: object
+      properties:
+        description:
+          type: string
+          nullable: true
+          maxLength: 16000
+          description: Описание пользователя или бота. В случае с пользователем может принимать значение `null`, если описание не заполнено
+        avatar_url:
+          type: string
+          description: URL аватара пользователя или бота в уменьшенном размере
+        full_avatar_url:
+          type: string
+          description: URL аватара пользователя или бота в полном размере
+      allOf:
+        - $ref: '#/components/schemas/User'
+      description: Объект с общей информацией о пользователе или боте. Является наследником схемы User — дополнительно к ней содержит URL аватара и описание
+    VideoAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - video
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MediaAttachmentPayload'
+          description: Полезная нагрузка видео-вложения
+        thumbnail:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/VideoThumbnail'
+          nullable: true
+          description: Миниатюра видео
+        width:
+          type: integer
+          nullable: true
+          description: Ширина видео
+        height:
+          type: integer
+          nullable: true
+          description: Высота видео
+        duration:
+          type: integer
+          nullable: true
+          description: Длина видео в секундах
+      allOf:
+        - $ref: '#/components/schemas/Attachment'
+      description: Вложение видео
+    VideoAttachmentDetails:
+      type: object
+      required:
+        - token
+        - width
+        - height
+        - duration
+      properties:
+        token:
+          type: string
+          description: Токен видео-вложения
+        urls:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/VideoUrls'
+          nullable: true
+          description: URL-ы для скачивания или воспроизведения видео. Может быть `null`, если видео недоступно
+        thumbnail:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/PhotoAttachmentPayload'
+          nullable: true
+          description: Миниатюра видео
+        width:
+          type: integer
+          description: Ширина видео
+        height:
+          type: integer
+          description: Высота видео
+        duration:
+          type: integer
+          description: Длина видео в секундах
+      description: Подробная информация о видео-вложении
+    VideoAttachmentRequest:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - video
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/UploadedInfo'
+          description: Полезная нагрузка запроса на прикрепление видео
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRequest'
+      description: Запрос на прикрепление видео к сообщению
+    VideoThumbnail:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: URL изображения
+      description: Миниатюра видео
+    VideoUrls:
+      type: object
+      properties:
+        mp4_1080:
+          type: string
+          nullable: true
+          description: URL видео в разрешении 1080p, если доступно
+        mp4_720:
+          type: string
+          nullable: true
+          description: URL видео в разрешении 720p, если доступно
+        mp4_480:
+          type: string
+          nullable: true
+          description: URL видео в разрешении 480p, если доступно
+        mp4_360:
+          type: string
+          nullable: true
+          description: URL видео в разрешении 360p, если доступно
+        mp4_240:
+          type: string
+          nullable: true
+          description: URL видео в разрешении 240p, если доступно
+        mp4_144:
+          type: string
+          nullable: true
+          description: URL видео в разрешении 144p, если доступно
+        hls:
+          type: string
+          nullable: true
+          description: URL трансляции, если доступна
+      description: URL-ы видео в разных разрешениях
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: query
+      name: access_token
+    BearerAuth:
+      type: http
+      scheme: Bearer
+servers:
+  - url: https://platform-api2.max.ru
+    variables: {}

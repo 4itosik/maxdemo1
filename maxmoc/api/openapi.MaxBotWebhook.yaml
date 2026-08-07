@@ -1,0 +1,1872 @@
+openapi: 3.0.0
+info:
+  title: Max Bot Webhook
+  description: |-
+    Контракт webhook-эндпоинта, который реализует РАЗРАБОТЧИК БОТА (а не
+    платформа MAX). После регистрации URL через `POST /subscriptions`
+    платформа доставляет события бота HTTPS POST-запросами на этот эндпоинт.
+
+    Требования платформы: HTTPS, порт 443, сертификат от доверенного центра
+    (самоподписные и HTTP не поддерживаются с 25 мая 2026). Отвечайте 200 OK
+    как можно быстрее; обработку события выполняйте после ответа.
+  version: 0.0.0
+tags:
+  - name: webhook-server
+paths:
+  /:
+    post:
+      operationId: WebhookReceiver_receiveUpdate
+      summary: Приём события от платформы MAX
+      description: |-
+        Приём события от платформы MAX. Тело описано двумя эквивалентными
+        способами (anyOf — любое событие соответствует обоим):
+        `UpdateUnified` — единая «плоская» схема (общие поля обязательны,
+        вариативные опциональны, у каждого указано, при каких `update_type`
+        приходит); `WebhookUpdate` — строгий oneOf из 16 конкретных типов
+        для типизированной кодогенерации.
+
+        Если при подписке был задан `secret`, платформа передаёт его в заголовке
+        `X-Max-Bot-Api-Secret` — проверяйте его, чтобы убедиться, что запрос
+        пришёл от MAX, а не от постороннего.
+      parameters:
+        - name: X-Max-Bot-Api-Secret
+          in: header
+          required: false
+          description: Секрет, заданный при создании подписки (см. SubscriptionRequestBody.secret)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Подтверждение приёма: платформа ожидает 200 OK без тела'
+      tags:
+        - webhook-server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - $ref: '#/components/schemas/UpdateUnified'
+                - $ref: '#/components/schemas/WebhookUpdate'
+        description: Событие; какие поля заполнены — определяется значением update_type
+components:
+  schemas:
+    MaxBotApi.Attachment:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          description: Тип вложения
+      discriminator:
+        propertyName: type
+        mapping:
+          image: '#/components/schemas/MaxBotApi.PhotoAttachment'
+          video: '#/components/schemas/MaxBotApi.VideoAttachment'
+          audio: '#/components/schemas/MaxBotApi.AudioAttachment'
+          file: '#/components/schemas/MaxBotApi.FileAttachment'
+          sticker: '#/components/schemas/MaxBotApi.StickerAttachment'
+          contact: '#/components/schemas/MaxBotApi.ContactAttachment'
+          inline_keyboard: '#/components/schemas/MaxBotApi.InlineKeyboardAttachment'
+          share: '#/components/schemas/MaxBotApi.ShareAttachment'
+          location: '#/components/schemas/MaxBotApi.LocationAttachment'
+          data: '#/components/schemas/MaxBotApi.DataAttachment'
+          reply_keyboard: '#/components/schemas/MaxBotApi.ReplyKeyboardAttachment'
+      description: Общая схема, представляющая вложение сообщения
+    MaxBotApi.AttachmentPayload:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: |-
+            URL медиа-вложения. Этот URL будет получен в объекте Update после
+            отправки сообщения в чат.
+
+            Прямую ссылку на видео также можно получить с помощью метода
+            `GET /videos/{-videoToken-}`
+      description: Базовая полезная нагрузка медиа-вложения
+    MaxBotApi.AudioAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - audio
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.MediaAttachmentPayload'
+          description: Полезная нагрузка аудио-вложения
+        transcription:
+          type: string
+          nullable: true
+          description: Аудио транскрипция
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение аудио
+    MaxBotApi.BotAddedToChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_added
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, куда был добавлен бот. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, добавивший бота в чат
+        is_channel:
+          type: boolean
+          description: Указывает, что бот добавлен в канал, а не в чат
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только бот будет добавлен в чат или канал
+    MaxBotApi.BotCommand:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Название команды
+        description:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 128
+          description: Описание команды
+      description: Команда, поддерживаемая ботом
+    MaxBotApi.BotInfo:
+      type: object
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaxBotApi.BotCommand'
+          nullable: true
+          maxItems: 32
+          description: Команды, поддерживаемые ботом
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.UserWithPhoto'
+      description: Объект включает общую информацию о боте, URL аватара и описание. Является наследником схемы UserWithPhoto. Дополнительно к ней содержит список команд, поддерживаемых ботом. Возвращается только при вызове метода `GET /me`
+    MaxBotApi.BotRemovedFromChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_removed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, откуда был удалён бот. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, удаливший бота из чата
+        is_channel:
+          type: boolean
+          description: Указывает, что бот удалён из канала, а не из чата
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только бот будет удалён из чата
+    MaxBotApi.BotStartedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_started
+        chat_id:
+          type: integer
+          format: int64
+          description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который нажал кнопку `Start`
+        payload:
+          type: string
+          nullable: true
+          maxLength: 512
+          description: Дополнительные данные из диплинков, переданные при запуске бота
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: |-
+        Вы получите это событие, как только пользователь начнёт или возобновит
+        общение с ботом: нажмёт соответствующую кнопку в настройках бота в МАКС
+    MaxBotApi.BotStoppedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - bot_stopped
+        chat_id:
+          type: integer
+          format: int64
+          description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который остановил бота
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только пользователь остановит бота в его настройках в МАКС
+    MaxBotApi.Button:
+      type: object
+      required:
+        - text
+        - type
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4'
+        type:
+          type: string
+          description: Discriminator property for Button.
+      discriminator:
+        propertyName: type
+        mapping:
+          callback: '#/components/schemas/MaxBotApi.CallbackButton'
+          link: '#/components/schemas/MaxBotApi.LinkButton'
+          request_geo_location: '#/components/schemas/MaxBotApi.RequestGeoLocationButton'
+          request_contact: '#/components/schemas/MaxBotApi.RequestContactButton'
+          chat: '#/components/schemas/MaxBotApi.ChatButton'
+          open_app: '#/components/schemas/MaxBotApi.OpenAppButton'
+          clipboard: '#/components/schemas/MaxBotApi.ClipboardButton'
+          message: '#/components/schemas/MaxBotApi.MessageButton'
+      description: Кнопка клавиатуры
+    MaxBotApi.Callback:
+      type: object
+      required:
+        - timestamp
+        - callback_id
+        - user
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix-время, когда пользователь нажал кнопку
+        callback_id:
+          type: string
+          description: Текущий ID клавиатуры
+        payload:
+          type: string
+          description: Токен кнопки
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, нажавший на кнопку
+      description: Объект, отправленный боту, когда пользователь нажимает кнопку
+    MaxBotApi.CallbackButton:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - callback
+        payload:
+          type: string
+          maxLength: 1024
+          description: Токен кнопки
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: После нажатия на такую кнопку клиент отправляет на сервер полезную нагрузку
+    MaxBotApi.Chat:
+      type: object
+      required:
+        - chat_id
+        - type
+        - status
+        - title
+        - icon
+        - last_event_time
+        - participants_count
+        - is_public
+        - description
+      properties:
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата или канала — в зависимости от ограничений метода и от того, с чем вы работаете. Как получить ID — в разделе «Получение chat_id»
+        type:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.ChatType'
+          description: 'Тип чата: `"chat"` — Групповой чат, `"channel"` — Канал, `"dialog"` — Диалог'
+        status:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.ChatStatus'
+          description: 'Статус чата: `"active"` — Бот является активным участником чата, `"removed"` — Бот был удалён из чата, `"left"` — Бот покинул чат, `"closed"` — Чат был закрыт'
+        title:
+          type: string
+          nullable: true
+          description: Отображаемое название чата или канала. Может быть `null` для диалогов
+        icon:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Image'
+          nullable: true
+          description: Иконка чата или канала
+        last_event_time:
+          type: integer
+          format: int64
+          description: Время последнего события в чате или канале
+        participants_count:
+          type: integer
+          format: int32
+          description: Количество участников чата или канала. Для диалогов всегда `2`
+        owner_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID владельца чата или канала
+        participants:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          nullable: true
+          description: Участники чата или канала с временем последней активности. Может быть `null`, если запрашивается список чатов
+        is_public:
+          type: boolean
+          description: Доступен ли чат публично (для диалогов всегда `false`)
+        link:
+          type: string
+          nullable: true
+          description: Ссылка на чат
+        description:
+          type: string
+          nullable: true
+          description: Описание чата или канала
+        dialog_with_user:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.UserWithPhoto'
+          nullable: true
+          description: Данные о пользователе в диалоге (только для чатов типа `"dialog"`)
+        messages_count:
+          type: integer
+          nullable: true
+          description: Количество сообщений в групповых чатах и каналах
+        pinned_message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Message'
+          nullable: true
+          description: Закреплённое сообщение в чате (возвращается только при запросе конкретного чата или канала)
+      description: |-
+        Объект содержит общую информацию о групповом чате или канале: его тип,
+        настройки отображения (название, аватар, описание, ссылка), публичную
+        доступность, а также информацию об участниках (владельце, боте и других
+        пользователях), времени их последней активности и событиях
+    MaxBotApi.ChatAdminPermission:
+      type: string
+      enum:
+        - read_all_messages
+        - add_remove_members
+        - add_admins
+        - change_chat_info
+        - pin_message
+        - write
+        - can_call
+        - edit_link
+        - post_edit_delete_message
+        - edit_message
+        - delete_message
+        - edit
+        - delete
+      description: Права администратора группового чата или канала
+    MaxBotApi.ChatButton:
+      type: object
+      required:
+        - type
+        - chat_title
+      properties:
+        type:
+          type: string
+          enum:
+            - chat
+        chat_title:
+          type: string
+          maxLength: 200
+          description: Название чата, который будет создан
+        chat_description:
+          type: string
+          nullable: true
+          maxLength: 400
+          description: Описание чата
+        start_payload:
+          type: string
+          nullable: true
+          maxLength: 512
+          description: Стартовая полезная нагрузка будет отправлена боту, как только чат будет создан
+        uuid:
+          type: integer
+          nullable: true
+          description: |-
+            Уникальный ID кнопки среди всех кнопок чата на клавиатуре.
+            Если `uuid` изменён, новый чат будет создан при следующем нажатии.
+            Сервер сгенерирует его в момент, когда кнопка будет впервые размещена.
+            Используйте его при редактировании сообщения.
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: |-
+        Кнопка, которая создает новый чат, как только первый пользователь на нее нажмёт.
+        Бот будет добавлен в участники чата как администратор.
+        Автор сообщения станет владельцем чата.
+
+        В оригинальной схеме отсутствует в `Button.discriminator.mapping` — см.
+        DEVIATIONS `mapping[chat]` в scripts/compare.py: литерал "chat" выведен по
+        конвенции соседних ключей (тот же приём, что и для `DataAttachment`).
+    MaxBotApi.ChatMember:
+      type: object
+      required:
+        - last_access_time
+        - is_owner
+        - is_admin
+        - join_time
+        - permissions
+      properties:
+        last_access_time:
+          type: integer
+          format: int64
+          description: Время последней активности пользователя в чате. Может быть устаревшим для суперчатов (равно времени вступления)
+        is_owner:
+          type: boolean
+          description: Является ли пользователь владельцем группового чата или канала
+        is_admin:
+          type: boolean
+          description: Является ли пользователь администратором группового чата или канала
+        join_time:
+          type: integer
+          format: int64
+          description: Дата присоединения к чату в формате Unix time
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaxBotApi.ChatAdminPermission'
+          nullable: true
+          description: |-
+            Перечень прав доступа пользователя или бота, если тот является
+            администратором группового чата или канала. Для обычных участников чата
+            или канала поле не возвращается
+        alias:
+          type: string
+          description: |-
+            Описание роли, которое будет отображаться на клиентском устройстве в
+            настройках чата или канала рядом с именем пользователя
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.UserWithPhoto'
+      description: |-
+        Объект включает общую информацию о пользователе или боте, URL аватара и
+        описание (при наличии). Является наследником схемы UserWithPhoto.
+        Дополнительно к ней содержит данные для пользователей-участников чата или
+        канала. Возвращается только при вызове некоторых методов группы `/chats`
+    MaxBotApi.ChatStatus:
+      type: string
+      enum:
+        - active
+        - removed
+        - left
+        - closed
+      description: Статус чата для текущего бота
+    MaxBotApi.ChatTitleChangedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - title
+      properties:
+        update_type:
+          type: string
+          enum:
+            - chat_title_changed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который изменил название
+        title:
+          type: string
+          description: Новое название
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только будет изменено название чата
+    MaxBotApi.ChatType:
+      type: string
+      enum:
+        - chat
+      description: 'Тип чата: диалог, чат'
+    MaxBotApi.ClipboardButton:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - clipboard
+        payload:
+          type: string
+          maxLength: 1024
+          description: Текст, который будет скопирован
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: При нажатии на кнопку с типом `clipboard` текст, указанный в свойстве `payload`, копируется в буфер обмена
+    MaxBotApi.ContactAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - contact
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.ContactAttachmentPayload'
+          description: Полезная нагрузка вложения-контакта
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение с карточкой контакта
+    MaxBotApi.ContactAttachmentPayload:
+      type: object
+      properties:
+        vcf_info:
+          type: string
+          nullable: true
+          description: Информация о пользователе в формате VCF
+        hash:
+          type: string
+          nullable: true
+          description: |-
+            Хеш информации о пользователе в формате VCF. Используется для проверки
+            того, что пользователь поделился номером телефона, привязанным к его
+            аккаунту в МАКС. Подробнее — в разделе «Типы кнопок»
+        max_info:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          nullable: true
+          description: Информация о пользователе
+      description: Полезная нагрузка вложения-контакта
+    MaxBotApi.DataAttachment:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          enum:
+            - data
+        data:
+          type: string
+          description: Полезная нагрузка, отправленная через SendMessageButton
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: |-
+        Вложение, содержащее полезную нагрузку, отправленную через `SendMessageButton`.
+
+        В оригинальной схеме отсутствует в `Attachment.discriminator.mapping` —
+        см. DEVIATIONS `mapping[data]` в scripts/compare.py (тот же приём, что и
+        для `ChatButton`).
+    MaxBotApi.DialogClearedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_cleared
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который очистил историю сообщений
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только пользователь очистит историю сообщений
+    MaxBotApi.DialogMutedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - muted_until
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_muted
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который отключил уведомления
+        muted_until:
+          type: integer
+          format: int64
+          description: Время в формате Unix, до наступления которого диалог был отключён
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: |-
+        Вы получите это событие, как только пользователь отключит уведомления о
+        новых сообщениях в диалоге с ботом
+    MaxBotApi.DialogRemovedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_removed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который удалил чат
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только пользователь удалит чат
+    MaxBotApi.DialogUnmutedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+      properties:
+        update_type:
+          type: string
+          enum:
+            - dialog_unmuted
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, который включил уведомления
+        user_locale:
+          type: string
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: |-
+        Вы получите это событие, как только пользователь включит уведомления о
+        новых сообщениях в диалоге с ботом
+    MaxBotApi.EmphasizedMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - emphasized
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет *курсив*
+    MaxBotApi.FileAttachment:
+      type: object
+      required:
+        - type
+        - payload
+        - filename
+        - size
+      properties:
+        type:
+          type: string
+          enum:
+            - file
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.FileAttachmentPayload'
+          description: Полезная нагрузка файлового вложения
+        filename:
+          type: string
+          description: Имя загруженного файла
+        size:
+          type: integer
+          format: int64
+          description: Размер файла в байтах
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение файла
+    MaxBotApi.FileAttachmentPayload:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.AttachmentPayload'
+      description: Полезная нагрузка файлового вложения
+    MaxBotApi.HeadingMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - heading
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет заголовок
+    MaxBotApi.HighlightedMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - highlighted
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет выделенный текст
+    MaxBotApi.Image:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: URL изображения
+      description: Общая схема, описывающая объект изображения
+    MaxBotApi.InlineKeyboardAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - inline_keyboard
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Keyboard'
+          description: Полезная нагрузка клавиатуры
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Кнопки в сообщении
+    MaxBotApi.Keyboard:
+      type: object
+      required:
+        - buttons
+      properties:
+        buttons:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/MaxBotApi.Button'
+          description: Массив рядов с кнопками
+      description: Клавиатура — это двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
+    MaxBotApi.LinkButton:
+      type: object
+      required:
+        - type
+        - url
+      properties:
+        type:
+          type: string
+          enum:
+            - link
+        url:
+          type: string
+          maxLength: 2048
+          description: Ссылка
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: После нажатия на такую кнопку пользователь переходит по ссылке, которую она содержит
+    MaxBotApi.LinkMarkup:
+      type: object
+      required:
+        - type
+        - url
+      properties:
+        type:
+          type: string
+          enum:
+            - link
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: URL ссылки
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет ссылку в тексте
+    MaxBotApi.LinkedMessage:
+      type: object
+      required:
+        - type
+        - message
+      properties:
+        type:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.MessageLinkType'
+          description: Тип связанного сообщения
+        sender:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, отправивший сообщение
+        chat_id:
+          type: integer
+          format: int64
+          description: Чат, в котором сообщение было изначально опубликовано. Только для пересланных сообщений. Как получить ID — в разделе «Получение chat_id»
+        message:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.MessageBody'
+          description: Содержимое связанного (пересланного или ответного) сообщения
+      description: Пересланное или ответное сообщение
+    MaxBotApi.LocationAttachment:
+      type: object
+      required:
+        - type
+        - latitude
+        - longitude
+      properties:
+        type:
+          type: string
+          enum:
+            - location
+        latitude:
+          type: number
+          format: double
+          description: Широта
+        longitude:
+          type: number
+          format: double
+          description: Долгота
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение географического положения
+    MaxBotApi.MarkupElement:
+      type: object
+      required:
+        - from
+        - length
+        - type
+      properties:
+        from:
+          type: integer
+          format: int32
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          description: Длина элемента разметки
+        type:
+          type: string
+          description: Discriminator property for MarkupElement.
+      discriminator:
+        propertyName: type
+        mapping:
+          strong: '#/components/schemas/MaxBotApi.StrongMarkup'
+          emphasized: '#/components/schemas/MaxBotApi.EmphasizedMarkup'
+          monospaced: '#/components/schemas/MaxBotApi.MonospacedMarkup'
+          link: '#/components/schemas/MaxBotApi.LinkMarkup'
+          strikethrough: '#/components/schemas/MaxBotApi.StrikethroughMarkup'
+          underline: '#/components/schemas/MaxBotApi.UnderlineMarkup'
+          user_mention: '#/components/schemas/MaxBotApi.UserMentionMarkup'
+          heading: '#/components/schemas/MaxBotApi.HeadingMarkup'
+          highlighted: '#/components/schemas/MaxBotApi.HighlightedMarkup'
+          quote: '#/components/schemas/MaxBotApi.QuoteMarkup'
+      description: Элемент разметки текста сообщения
+    MaxBotApi.MediaAttachmentPayload:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.AttachmentPayload'
+      description: Полезная нагрузка медиа-вложения (видео/аудио)
+    MaxBotApi.Message:
+      type: object
+      required:
+        - recipient
+        - timestamp
+        - body
+      properties:
+        sender:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, отправивший сообщение
+        recipient:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Recipient'
+          description: Получатель сообщения. Может быть пользователем или чатом
+        timestamp:
+          type: integer
+          format: int64
+          description: Время создания сообщения в формате Unix-time
+        link:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.LinkedMessage'
+          nullable: true
+          description: Пересланное или ответное сообщение
+        body:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.MessageBody'
+          description: Содержимое сообщения. Текст + вложения. Может быть `null`, если сообщение содержит только пересланное сообщение
+        stat:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.MessageStat'
+          nullable: true
+          description: Статистика сообщения. Возвращается только для постов в каналах
+        url:
+          type: string
+          nullable: true
+          description: Публичная ссылка на пост в канале. Отсутствует для диалогов и групповых чатов
+      description: Сообщение в чате
+    MaxBotApi.MessageBody:
+      type: object
+      required:
+        - mid
+        - seq
+        - text
+      properties:
+        mid:
+          type: string
+          description: Уникальный ID сообщения
+        seq:
+          type: integer
+          format: int64
+          description: ID последовательности сообщения в чате
+        text:
+          type: string
+          nullable: true
+          description: Новый текст сообщения
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaxBotApi.Attachment'
+          nullable: true
+          description: Вложения сообщения. Могут быть одним из типов `Attachment`. Смотрите описание схемы
+        markup:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+          nullable: true
+          description: Разметка текста сообщения. Для подробной информации загляните в раздел [Форматирование](/docs-api#Форматирование%20текста%20в%20сообщениях)
+      description: Схема, представляющая тело сообщения
+    MaxBotApi.MessageButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - message
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: Кнопка, при нажатии на которую от лица пользователя в чат отправляется указанный текст
+    MaxBotApi.MessageCallbackUpdate:
+      type: object
+      required:
+        - update_type
+        - callback
+        - message
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_callback
+        callback:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Callback'
+          description: Нажатая пользователем кнопка
+        message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Message'
+          nullable: true
+          description: |-
+            Изначальное сообщение, содержащее встроенную клавиатуру. Может быть
+            `null`, если оно было удалено к моменту, когда бот получил это событие
+        user_locale:
+          type: string
+          nullable: true
+          description: Текущий язык пользователя в формате IETF BCP 47
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только пользователь нажмёт кнопку
+    MaxBotApi.MessageChatCreatedUpdate:
+      type: object
+      required:
+        - update_type
+        - chat
+        - message_id
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_chat_created
+        chat:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Chat'
+          description: Созданный чат
+        message_id:
+          type: string
+          description: ID сообщения, где была нажата кнопка
+        start_payload:
+          type: string
+          nullable: true
+          description: Полезная нагрузка от кнопки чата
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: |-
+        Вы получите это событие, как только пользователь нажмёт в сообщении на
+        кнопку с типом `chat` и будет создан новый чат с ботом, связанный с этим
+        сообщением с кнопкой.
+
+        KNOWN: в оригинальной схеме этот дискриминатор отсутствует в
+        `Update.discriminator.mapping` (недосмотр оригинала) — см. DEVIATIONS
+        `message_chat_created` в scripts/compare.py.
+    MaxBotApi.MessageCreatedUpdate:
+      type: object
+      required:
+        - update_type
+        - message
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_created
+        message:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Message'
+          description: Новое созданное сообщение
+        user_locale:
+          type: string
+          nullable: true
+          description: Текущий язык пользователя в формате IETF BCP 47. Доступно только в диалогах
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только сообщение будет создано
+    MaxBotApi.MessageEditedUpdate:
+      type: object
+      required:
+        - update_type
+        - message
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_edited
+        message:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Message'
+          description: Отредактированное сообщение
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только пользователь отредактирует сообщение
+    MaxBotApi.MessageLinkType:
+      type: string
+      enum:
+        - forward
+        - reply
+      description: Тип связанного сообщения
+    MaxBotApi.MessageRemovedUpdate:
+      type: object
+      required:
+        - update_type
+        - message_id
+        - chat_id
+        - user_id
+      properties:
+        update_type:
+          type: string
+          enum:
+            - message_removed
+        message_id:
+          type: string
+          description: ID удалённого сообщения
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где сообщение было удалено. Как получить ID — в разделе «Получение chat_id»
+        user_id:
+          type: integer
+          format: int64
+          description: Пользователь, удаливший сообщение
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: Вы получите это событие, как только сообщение будет удалено
+    MaxBotApi.MessageStat:
+      type: object
+      required:
+        - views
+      properties:
+        views:
+          type: integer
+          description: Количество пользователей, которые увидели пост в канале. Просмотр засчитывается, когда пост попадает в область видимости экрана
+      description: Статистика сообщения. Возвращается только для постов в каналах
+    MaxBotApi.MonospacedMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - monospaced
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет `моноширинный` или блок ```код``` в тексте
+    MaxBotApi.OpenAppButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - open_app
+        web_app:
+          type: string
+          description: Публичное имя (username) бота или ссылка на него, чьё мини-приложение надо запустить
+        contact_id:
+          type: integer
+          format: int64
+          description: Идентификатор бота, чьё мини-приложение надо запустить
+        payload:
+          type: string
+          description: Параметр запуска, который будет передан в initData мини-приложения
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: Кнопка для запуска мини-приложения
+    MaxBotApi.PhotoAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - image
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.PhotoAttachmentPayload'
+          description: Полезная нагрузка фото-вложения
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение изображения
+    MaxBotApi.PhotoAttachmentPayload:
+      type: object
+      required:
+        - photo_id
+        - token
+        - url
+      properties:
+        photo_id:
+          type: integer
+          format: int64
+          description: Уникальный ID этого изображения
+        token:
+          type: string
+          description: Токен вложения
+        url:
+          type: string
+          description: 'URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте'
+      description: Полезная нагрузка фото-вложения
+    MaxBotApi.QuoteMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - quote
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет цитату
+    MaxBotApi.Recipient:
+      type: object
+      required:
+        - chat_id
+        - chat_type
+        - user_id
+      properties:
+        chat_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID чата. Как получить ID — в разделе «Получение chat_id»
+        chat_type:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.ChatType'
+          description: Тип чата
+        user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID пользователя, если сообщение было отправлено пользователю
+      description: Новый получатель сообщения. Может быть пользователем или чатом
+    MaxBotApi.ReplyButton:
+      type: object
+      required:
+        - text
+        - type
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Видимый текст кнопки
+        payload:
+          type: string
+          nullable: true
+          maxLength: 1024
+          description: Токен кнопки
+        type:
+          type: string
+          description: Discriminator property for ReplyButton.
+      discriminator:
+        propertyName: type
+        mapping:
+          message: '#/components/schemas/MaxBotApi.SendMessageButton'
+          user_geo_location: '#/components/schemas/MaxBotApi.SendGeoLocationButton'
+          user_contact: '#/components/schemas/MaxBotApi.SendContactButton'
+      description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
+    MaxBotApi.ReplyKeyboardAttachment:
+      type: object
+      required:
+        - type
+        - buttons
+      properties:
+        type:
+          type: string
+          enum:
+            - reply_keyboard
+        buttons:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/MaxBotApi.ReplyButton'
+          description: Массив рядов с кнопками
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: |-
+        Пользовательская reply-клавиатура в сообщении.
+
+        В оригинальной схеме отсутствует в `Attachment.discriminator.mapping` —
+        см. DEVIATIONS `mapping[reply_keyboard]` в scripts/compare.py (тот же
+        приём, что и для `ChatButton`).
+    MaxBotApi.RequestContactButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - request_contact
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
+    MaxBotApi.RequestGeoLocationButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - request_geo_location
+        quick:
+          type: boolean
+          description: Если `true`, отправляет местоположение без запроса подтверждения пользователя
+          default: false
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Button'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
+    MaxBotApi.SendContactButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - user_contact
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.ReplyButton'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
+    MaxBotApi.SendGeoLocationButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - user_geo_location
+        quick:
+          type: boolean
+          description: Если `true`, отправляет местоположение без запроса подтверждения пользователя
+          default: false
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.ReplyButton'
+      description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
+    MaxBotApi.SendMessageButton:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - message
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.ReplyButton'
+      description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
+    MaxBotApi.ShareAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - share
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.ShareAttachmentPayload'
+          description: Полезная нагрузка предпросмотра ссылки
+        title:
+          type: string
+          nullable: true
+          description: Заголовок предпросмотра ссылки
+        description:
+          type: string
+          nullable: true
+          description: Описание предпросмотра ссылки
+        image_url:
+          type: string
+          nullable: true
+          description: Изображение предпросмотра ссылки
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение с предпросмотром ссылки
+    MaxBotApi.ShareAttachmentPayload:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+          minLength: 1
+          description: URL, прикрепленный к сообщению в качестве предпросмотра медиа
+        token:
+          type: string
+          nullable: true
+          description: Токен вложения
+      description: Полезная нагрузка запроса ShareAttachmentRequest
+    MaxBotApi.StickerAttachment:
+      type: object
+      required:
+        - type
+        - payload
+        - width
+        - height
+      properties:
+        type:
+          type: string
+          enum:
+            - sticker
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.StickerAttachmentPayload'
+          description: Полезная нагрузка вложения-стикера
+        width:
+          type: integer
+          description: Ширина стикера
+        height:
+          type: integer
+          description: Высота стикера
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение стикера
+    MaxBotApi.StickerAttachmentPayload:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: ID стикера
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.AttachmentPayload'
+      description: Полезная нагрузка вложения-стикера
+    MaxBotApi.StrikethroughMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - strikethrough
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет ~зачёркнутый~ текст
+    MaxBotApi.StrongMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - strong
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет **жирный** текст
+    MaxBotApi.UnderlineMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - underline
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет подчёркнутый текст
+    MaxBotApi.Update:
+      type: object
+      required:
+        - update_type
+        - timestamp
+      properties:
+        update_type:
+          type: string
+          description: Тип события
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix-время, когда произошло событие
+      discriminator:
+        propertyName: update_type
+        mapping:
+          message_callback: '#/components/schemas/MaxBotApi.MessageCallbackUpdate'
+          message_edited: '#/components/schemas/MaxBotApi.MessageEditedUpdate'
+          message_removed: '#/components/schemas/MaxBotApi.MessageRemovedUpdate'
+          bot_added: '#/components/schemas/MaxBotApi.BotAddedToChatUpdate'
+          bot_removed: '#/components/schemas/MaxBotApi.BotRemovedFromChatUpdate'
+          bot_started: '#/components/schemas/MaxBotApi.BotStartedUpdate'
+          bot_stopped: '#/components/schemas/MaxBotApi.BotStoppedUpdate'
+          chat_title_changed: '#/components/schemas/MaxBotApi.ChatTitleChangedUpdate'
+          dialog_cleared: '#/components/schemas/MaxBotApi.DialogClearedUpdate'
+          dialog_muted: '#/components/schemas/MaxBotApi.DialogMutedUpdate'
+          dialog_unmuted: '#/components/schemas/MaxBotApi.DialogUnmutedUpdate'
+          dialog_removed: '#/components/schemas/MaxBotApi.DialogRemovedUpdate'
+          user_added: '#/components/schemas/MaxBotApi.UserAddedToChatUpdate'
+          user_removed: '#/components/schemas/MaxBotApi.UserRemovedFromChatUpdate'
+          message_chat_created: '#/components/schemas/MaxBotApi.MessageChatCreatedUpdate'
+          message_created: '#/components/schemas/MaxBotApi.MessageCreatedUpdate'
+      description: |-
+        Объект `Update` описывает возможные события в чате или канале. Может
+        возвращаться в следующих случаях:
+        - вы подписались на обновления через Webhook — при наступлении события
+        МАКС пришлёт POST-запрос `/subscriptions`, который содержит объект `Update`;
+        - вы отправили GET-запрос `/updates` для получения обновлений через
+        Long Polling — в ответ вернётся объект `Update`.
+    MaxBotApi.User:
+      type: object
+      # ПРАВКА МОКА (не апстрим): username убран из required — живой Max у
+      # пользователя без публичного имени поле не присылает, то есть нарушает
+      # эту спеку. Мок повторяет прод, а не контракт; подробности в
+      # internal/wire/wire.go у типа User. При обновлении спеки с апстрима
+      # правку нужно нанести заново.
+      required:
+        - user_id
+        - first_name
+        - is_bot
+        - last_activity_time
+        - name
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: Идентификатор пользователя или бота
+        first_name:
+          type: string
+          description: Отображаемое имя пользователя или бота
+        last_name:
+          type: string
+          nullable: true
+          description: Отображаемая фамилия пользователя. Для ботов это поле не возвращается
+        username:
+          type: string
+          nullable: true
+          description: Никнейм бота или уникальное публичное имя пользователя. В случае с пользователем может быть `null`, если тот недоступен или имя не задано
+        is_bot:
+          type: boolean
+          description: '`true`, если это бот'
+        last_activity_time:
+          type: integer
+          format: int64
+          description: Время последней активности пользователя или бота в MAX (Unix-время в миллисекундах). Если пользователь отключил в настройках профиля мессенджера MAX возможность видеть, что он в сети онлайн, поле может не возвращаться
+        name:
+          type: string
+          nullable: true
+          description: Устаревшее поле, скоро будет удалено
+      description: |-
+        Объект, описывающий один из вариантов наследования:
+
+        - `User` — объект содержит общую информацию о пользователе или боте без аватара
+        - `UserWithPhoto` — объект с общей информацией о пользователе или боте, дополнительно содержит URL аватара и описание
+        - `BotInfo` — объект включает общую информацию о боте, URL аватара и описание. Дополнительно содержит список команд, поддерживаемых ботом. Возвращается только при вызове метода `GET /me`
+        - `ChatMember` — объект включает общую информацию о пользователе или боте, URL аватара и описание при его наличии. Дополнительно содержит данные для пользователей-участников чата. Возвращается только при вызове некоторых методов группы `/chats`
+    MaxBotApi.UserAddedToChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - user_added
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, добавленный в чат
+        inviter_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |-
+            Пользователь, который добавил нового пользователя в чат. Может быть
+            `null`, если пользователь присоединился к чату по ссылке
+        is_channel:
+          type: boolean
+          description: Указывает, что пользователь добавлен в канал, а не в чат
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: |-
+        Вы получите это событие, как только пользователь будет добавлен в чат,
+        где бот является администратором
+    MaxBotApi.UserMentionMarkup:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - user_mention
+        user_link:
+          type: string
+          nullable: true
+          description: '`@username` упомянутого пользователя'
+        user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID упомянутого пользователя без имени
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
+      description: Представляет упоминание пользователя в тексте. Упоминание может быть как по имени пользователя, так и по ID, если у пользователя нет имени
+    MaxBotApi.UserRemovedFromChatUpdate:
+      type: object
+      required:
+        - update_type
+        - chat_id
+        - user
+        - is_channel
+      properties:
+        update_type:
+          type: string
+          enum:
+            - user_removed
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь, удалённый из чата
+        admin_id:
+          type: integer
+          format: int64
+          description: |-
+            Администратор, который удалил пользователя из чата. Может быть `null`,
+            если пользователь покинул чат сам
+        is_channel:
+          type: boolean
+          description: Указывает, что пользователь удалён из канала, а не из чата
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Update'
+      description: |-
+        Вы получите это событие, как только пользователь будет удалён из чата,
+        где бот является администратором
+    MaxBotApi.UserWithPhoto:
+      type: object
+      properties:
+        description:
+          type: string
+          nullable: true
+          maxLength: 16000
+          description: Описание пользователя или бота. В случае с пользователем может принимать значение `null`, если описание не заполнено
+        avatar_url:
+          type: string
+          description: URL аватара пользователя или бота в уменьшенном размере
+        full_avatar_url:
+          type: string
+          description: URL аватара пользователя или бота в полном размере
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.User'
+      description: Объект с общей информацией о пользователе или боте. Является наследником схемы User — дополнительно к ней содержит URL аватара и описание
+    MaxBotApi.VideoAttachment:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          enum:
+            - video
+        payload:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.MediaAttachmentPayload'
+          description: Полезная нагрузка видео-вложения
+        thumbnail:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.VideoThumbnail'
+          nullable: true
+          description: Миниатюра видео
+        width:
+          type: integer
+          nullable: true
+          description: Ширина видео
+        height:
+          type: integer
+          nullable: true
+          description: Высота видео
+        duration:
+          type: integer
+          nullable: true
+          description: Длина видео в секундах
+      allOf:
+        - $ref: '#/components/schemas/MaxBotApi.Attachment'
+      description: Вложение видео
+    MaxBotApi.VideoThumbnail:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: URL изображения
+      description: Миниатюра видео
+    UpdateUnified:
+      type: object
+      required:
+        - update_type
+        - timestamp
+      properties:
+        update_type:
+          type: string
+          description: |-
+            Тип события: message_created | message_callback | message_edited |
+            message_removed | message_chat_created | bot_added | bot_removed |
+            bot_started | bot_stopped | chat_title_changed | dialog_cleared |
+            dialog_muted | dialog_unmuted | dialog_removed | user_added |
+            user_removed
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix-время, когда произошло событие
+        chat_id:
+          type: integer
+          format: int64
+          description: ID чата. [bot_added, bot_started, bot_stopped, bot_removed, chat_title_changed, dialog_cleared, dialog_muted, dialog_unmuted, dialog_removed, message_removed, user_added, user_removed]
+        user:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.User'
+          description: Пользователь-инициатор события. [bot_added, bot_started, bot_stopped, bot_removed, chat_title_changed, dialog_cleared, dialog_muted, dialog_unmuted, dialog_removed, user_added, user_removed]
+        user_locale:
+          type: string
+          nullable: true
+          description: Текущий язык пользователя (IETF BCP 47), доступен только в диалогах. [bot_started, bot_stopped, dialog_cleared, dialog_muted, dialog_unmuted, dialog_removed, message_created, message_callback]
+        is_channel:
+          type: boolean
+          description: Признак «событие в канале, а не в чате». [bot_added, bot_removed, user_added, user_removed]
+        message:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Message'
+          nullable: true
+          description: 'Сообщение: новое, отредактированное или с нажатой кнопкой (может быть null). [message_created, message_edited, message_callback]'
+        callback:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Callback'
+          description: Нажатие callback-кнопки. [message_callback]
+        title:
+          type: string
+          description: Новое название чата. [chat_title_changed]
+        payload:
+          type: string
+          nullable: true
+          maxLength: 512
+          description: Данные из диплинка, переданные при запуске бота. [bot_started]
+        muted_until:
+          type: integer
+          format: int64
+          description: До какого времени отключены уведомления (Unix-время). [dialog_muted]
+        inviter_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Кто пригласил пользователя; null, если вошёл по ссылке. [user_added]
+        admin_id:
+          type: integer
+          format: int64
+          description: Администратор, удаливший пользователя; отсутствует, если пользователь вышел сам. [user_removed]
+        message_id:
+          type: string
+          description: 'ID сообщения: удалённого или того, где была нажата кнопка чата. [message_removed, message_chat_created]'
+        user_id:
+          type: integer
+          format: int64
+          description: Автор удалённого сообщения. [message_removed]
+        chat:
+          allOf:
+            - $ref: '#/components/schemas/MaxBotApi.Chat'
+          description: Созданный чат. [message_chat_created]
+        start_payload:
+          type: string
+          nullable: true
+          description: Полезная нагрузка кнопки чата. [message_chat_created]
+      description: |-
+        Единая («плоская») схема события: объединение полей всех 16 типов
+        `Update` в один объект — в стиле Telegram Bot API. Обязательны только
+        `update_type` и `timestamp`; остальные поля приходят в зависимости от
+        типа события. Удобна, когда на сервере хочется один класс/структуру
+        на все события без union-машинерии.
+    WebhookUpdate:
+      oneOf:
+        - $ref: '#/components/schemas/MaxBotApi.MessageCreatedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageCallbackUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageEditedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageRemovedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageChatCreatedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotAddedToChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotRemovedFromChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotStartedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotStoppedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.ChatTitleChangedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogClearedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogMutedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogUnmutedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogRemovedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.UserAddedToChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.UserRemovedFromChatUpdate'
+      description: |-
+        Явный oneOf всех 16 типов событий — чтобы Swagger UI и генераторы
+        показывали полный список вариантов, а не только базовые поля Update
+        (allOf-наследование дискриминированного union'а UI не разворачивают).
+servers:
+  - url: https://bot.example.ru
+    description: Ваш webhook-endpoint (URL из POST /subscriptions)
+    variables: {}

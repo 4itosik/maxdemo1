@@ -1,0 +1,189 @@
+namespace MaxBotApi;
+
+/** Запрос на прикрепление данных к сообщению */
+@discriminator("type")
+model AttachmentRequest {
+  /** Тип вложения */
+  type: string;
+}
+
+/** Токен, полученный после загрузки изображения */
+model PhotoToken {
+  /** Закодированная информация загруженного изображения */
+  token: string;
+}
+
+/** Это информация, которую вы получите, как только изображение будет загружено */
+model PhotoTokens {
+  /** Токены загруженных изображений */
+  photos: Record<PhotoToken>;
+}
+
+/** Запрос на прикрепление изображения (все поля являются взаимоисключающими) */
+model PhotoAttachmentRequestPayload {
+  /** Любой внешний URL изображения, которое вы хотите прикрепить */
+  @minLength(1)
+  url?: string | null;
+
+  /** Токен существующего вложения */
+  token?: string | null;
+
+  /** Токены, полученные после загрузки изображений */
+  photos?: Record<PhotoToken> | null;
+}
+
+/** Это информация, которую вы получите, как только аудио/видео будет загружено */
+model UploadedInfo {
+  /** Токен — уникальный ID загруженного медиафайла */
+  token?: string;
+}
+
+/** Полезная нагрузка запроса на прикрепление карточки контакта */
+model ContactAttachmentRequestPayload {
+  /** Имя контакта */
+  name: string | null;
+
+  /** ID контакта, если он зарегистрирован в MAX */
+  contact_id?: int64 | null;
+
+  /** Полная информация о контакте в формате VCF */
+  vcf_info?: string | null;
+
+  /** Телефон контакта в формате VCF */
+  vcf_phone?: string | null;
+}
+
+/** Полезная нагрузка запроса на прикрепление стикера */
+model StickerAttachmentRequestPayload {
+  /** Код стикера */
+  code: string;
+}
+
+/** Полезная нагрузка запроса на прикрепление клавиатуры */
+model InlineKeyboardAttachmentRequestPayload {
+  /** Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота» */
+  @minItems(1)
+  buttons: Button[][];
+}
+
+/**
+ * Тип загружаемого медиафайла. Возможные значения и поддерживаемые форматы:
+ * - `image` — изображение (JPG, JPEG, PNG, GIF, TIFF, BMP, HEIC). Максимальный
+ *   размер одного изображения: до 50 МБ или не более 7680 x 7680 px — должны
+ *   выполняться оба критерия
+ * - `video` — видеофайл (MP4, MOV, MKV, WEBM). Максимальный размер одного
+ *   видео: до 250 МБ
+ * - `audio` — аудиофайл (MP3, WAV, M4A и другие). Максимальный размер одного
+ *   аудио: до 256 МБ или длительностью не более 60 мин — должны выполняться
+ *   оба критерия
+ * - `file` — файл, поддерживаются распространённые форматы (например, TXT,
+ *   DOC и другие). Максимальный размер одного файла: до 4 ГБ
+ *
+ * При передаче неподдерживаемого типа файла вернётся ошибка
+ * `File extension is forbidden`.
+ *
+ * Значение `photo` больше не поддерживается. Если вы использовали
+ * `type=photo` в ранее созданных интеграциях — замените его на `type=image`
+ */
+enum UploadType {
+  image: "image",
+  video: "video",
+  audio: "audio",
+  file: "file",
+}
+
+/** Запрос на прикрепление изображения к сообщению */
+model PhotoAttachmentRequest extends AttachmentRequest {
+  type: "image";
+
+  /** Полезная нагрузка запроса на прикрепление изображения */
+  payload: PhotoAttachmentRequestPayload;
+}
+
+/** Запрос на прикрепление видео к сообщению */
+model VideoAttachmentRequest extends AttachmentRequest {
+  type: "video";
+
+  /** Полезная нагрузка запроса на прикрепление видео */
+  payload: UploadedInfo;
+}
+
+/** Запрос на прикрепление аудио к сообщению. Должен быть единственным вложением в сообщении */
+model AudioAttachmentRequest extends AttachmentRequest {
+  type: "audio";
+
+  /** Полезная нагрузка запроса на прикрепление аудио */
+  payload: UploadedInfo;
+}
+
+/** Запрос на прикрепление файла к сообщению. Должен быть единственным вложением в сообщении */
+model FileAttachmentRequest extends AttachmentRequest {
+  type: "file";
+
+  /** Полезная нагрузка запроса на прикрепление файла */
+  payload: UploadedInfo;
+}
+
+/** Запрос на прикрепление стикера. Должен быть единственным вложением в сообщении */
+model StickerAttachmentRequest extends AttachmentRequest {
+  type: "sticker";
+
+  /** Полезная нагрузка запроса на прикрепление стикера */
+  payload: StickerAttachmentRequestPayload;
+}
+
+/** Запрос на прикрепление карточки контакта к сообщению. Должен быть единственным вложением в сообщении */
+model ContactAttachmentRequest extends AttachmentRequest {
+  type: "contact";
+
+  /** Полезная нагрузка запроса на прикрепление карточки контакта */
+  payload: ContactAttachmentRequestPayload;
+}
+
+/** Запрос на прикрепление клавиатуры к сообщению */
+model InlineKeyboardAttachmentRequest extends AttachmentRequest {
+  type: "inline_keyboard";
+
+  /** Полезная нагрузка запроса на прикрепление клавиатуры */
+  payload: InlineKeyboardAttachmentRequestPayload;
+}
+
+/**
+ * Запрос на прикрепление reply-клавиатуры к сообщению.
+ *
+ * В оригинальной схеме отсутствует в `AttachmentRequest.discriminator.mapping`
+ * — см. DEVIATIONS `mapping[reply_keyboard]` в scripts/compare.py (тот же
+ * приём, что и для `ChatButton`).
+ */
+model ReplyKeyboardAttachmentRequest extends AttachmentRequest {
+  type: "reply_keyboard";
+
+  /** Применимо только для чатов. Если `true`, клавиатура будет показана только тому, кто упомянул или ответил боту */
+  direct?: boolean = false;
+
+  /** Если задано, reply-клавиатура будет показана только этому участнику чата */
+  direct_user_id?: int64 | null;
+
+  /** Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота» */
+  @minItems(1)
+  buttons: ReplyButton[][];
+}
+
+/** Запрос на прикрепление вложения географического положения */
+model LocationAttachmentRequest extends AttachmentRequest {
+  type: "location";
+
+  /** Широта */
+  latitude: float64;
+
+  /** Долгота */
+  longitude: float64;
+}
+
+/** Запрос на прикрепление предпросмотра медиафайла по внешнему URL */
+model ShareAttachmentRequest extends AttachmentRequest {
+  type: "share";
+
+  /** Полезная нагрузка запроса на прикрепление предпросмотра ссылки */
+  payload: ShareAttachmentPayload;
+}

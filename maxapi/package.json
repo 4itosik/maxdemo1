@@ -1,0 +1,15 @@
+{
+  "name": "max-bot-api-typespec",
+  "version": "0.0.32",
+  "private": true,
+  "description": "TypeSpec-описание Max Bot API (https://dev.max.ru/docs-api)",
+  "scripts": {
+    "test": "tsp compile . && python3 scripts/compare.py"
+  },
+  "devDependencies": {
+    "@typespec/compiler": "^1.13.0",
+    "@typespec/http": "^1.13.0",
+    "@typespec/openapi": "^1.13.0",
+    "@typespec/openapi3": "^1.13.0"
+  }
+}

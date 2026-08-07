@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>max-mock — чат</title>
+<link rel="stylesheet" href="/mock/static/style.css">
+</head>
+<body>
+<header>
+  <h1>max-mock</h1>
+  <span id="bot-title" class="muted"></span>
+  <span class="spacer"></span>
+  <span id="ws-state" class="badge">подключение…</span>
+  <a href="/mock">админка</a>
+</header>
+
+<div class="chat-layout">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <strong style="flex:1">Клиенты</strong>
+      <button id="add-client" class="secondary">+</button>
+    </div>
+    <div id="clients" class="client-list"></div>
+  </aside>
+
+  <section class="chat-panel">
+    <div class="chat-head">
+      <strong id="dialog-title" style="flex:1">Выберите клиента</strong>
+      <div class="tabs">
+        <button data-tab="chat" class="active">Чат</button>
+        <button data-tab="events">События</button>
+        <button data-tab="log">Журнал</button>
+        <button data-tab="deliveries">Доставки</button>
+      </div>
+    </div>
+
+    <div id="messages" class="messages"></div>
+    <div id="events-panel" class="log-panel"></div>
+    <div id="log-panel" class="log-panel"></div>
+    <div id="deliveries-panel" class="log-panel"></div>
+
+    <div id="commands" class="commands" hidden></div>
+    <form id="composer" class="composer">
+      <button type="button" id="start-btn" class="secondary">Начать</button>
+      <input id="text" type="text" placeholder="Сообщение от лица клиента" autocomplete="off">
+      <input id="file" type="file" style="display:none">
+      <button type="button" id="attach" class="secondary" title="Прикрепить файл">📎</button>
+      <button type="button" id="send-contact" class="secondary" title="Отправить свой контакт">👤</button>
+      <button type="button" id="send-location" class="secondary" title="Отправить геопозицию">📍</button>
+      <button type="submit">Отправить</button>
+    </form>
+  </section>
+</div>
+
+<dialog id="client-dialog">
+  <form id="client-form" method="dialog">
+    <h2>Новый клиент</h2>
+    <p class="muted">
+      Имя и фамилия уезжают к КЦ в каждом событии. Телефон и координаты — только
+      вложениями <code>contact</code> и <code>location</code>: в схеме
+      пользователя их нет.
+    </p>
+    <label>Имя<input name="first_name" required autocomplete="off"></label>
+    <label>Фамилия<input name="last_name" autocomplete="off"></label>
+    <label>Username<input name="username" autocomplete="off"></label>
+    <label>Телефон<input name="phone" autocomplete="off" placeholder="+79001234567"></label>
+    <label>Координаты<input name="coords" autocomplete="off" placeholder="55.751244, 37.618423"></label>
+    <label>
+      user_id
+      <input name="user_id" autocomplete="off" inputmode="numeric" placeholder="пусто — сгенерировать">
+      <span class="muted">задайте, чтобы воспроизвести абонента из тестовых данных КЦ</span>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" id="client-cancel" class="secondary">Отмена</button>
+      <button type="submit">Создать</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/mock/static/chat.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>max-mock — админка</title>
+<link rel="stylesheet" href="/mock/static/style.css">
+</head>
+<body>
+<header>
+  <h1>max-mock</h1>
+  <span class="version muted">эмулятор бот-платформы Max · контракт 0.0.32</span>
+  <span class="spacer"></span>
+  <span id="ws-state" class="badge">подключение…</span>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Новый бот</h2>
+    <form id="bot-form" class="row">
+      <input id="bot-name" type="text" placeholder="Имя бота" required>
+      <input id="bot-username" type="text" placeholder="username">
+      <input id="bot-description" type="text" placeholder="описание">
+      <button type="submit">Зарегистрировать</button>
+    </form>
+    <p class="muted" style="margin-bottom:0">
+      После регистрации выдаётся access_token — его КЦ передаёт в заголовке
+      <code>Authorization: &lt;token&gt;</code>, голым, без схемы «Bearer»:
+      так же, как на живом Max.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Боты</h2>
+    <table id="bots">
+      <thead>
+        <tr><th>Имя</th><th>username</th><th>user_id</th><th>access_token</th><th>Подписки</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="bots-empty" class="empty">Ботов пока нет.</div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0">Журнал запросов Bot API</h2>
+      <div class="row">
+        <label for="log-bot" class="muted">Бот:</label>
+        <select id="log-bot"><option value="">все боты</option></select>
+        <label for="log-limit" class="muted">Показывать:</label>
+        <select id="log-limit">
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="500">500</option>
+        </select>
+      </div>
+    </div>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script src="/mock/static/admin.js"></script>
+</body>
+</html>
