@@ -15,6 +15,7 @@ model PhotoToken {
   /** Закодированная информация загруженного изображения */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token: string;
 }
 
@@ -30,11 +31,13 @@ model PhotoAttachmentRequestPayload {
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @minLength(1)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{1,2048}$")
   url?: string | null;
 
   /** Токен существующего вложения */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token?: string | null;
 
   /** Токены, полученные после загрузки изображений */
@@ -46,6 +49,7 @@ model UploadedInfo {
   /** Токен — уникальный ID загруженного медиафайла */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token?: string;
 }
 
@@ -53,6 +57,7 @@ model UploadedInfo {
 model ContactAttachmentRequestPayload {
   /** Имя контакта */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   name: string | null;
 
   /** ID контакта, если он зарегистрирован в MAX */
@@ -63,10 +68,12 @@ model ContactAttachmentRequestPayload {
   /** Полная информация о контакте в формате VCF */
   // 4096 — в оригинале лимита нет; запас под VCF-карточку
   @maxLength(4096)
+  @pattern("^[\\w\\W]{0,4096}$")
   vcf_info?: string | null;
 
   /** Телефон контакта в формате VCF */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   vcf_phone?: string | null;
 }
 
@@ -74,6 +81,7 @@ model ContactAttachmentRequestPayload {
 model StickerAttachmentRequestPayload {
   /** Код стикера */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   code: string;
 }
 
@@ -113,6 +121,7 @@ enum UploadType {
 
 /** Запрос на прикрепление изображения к сообщению */
 model PhotoAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `image` */
   type: "image";
 
   /** Полезная нагрузка запроса на прикрепление изображения */
@@ -121,6 +130,7 @@ model PhotoAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление видео к сообщению */
 model VideoAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `video` */
   type: "video";
 
   /** Полезная нагрузка запроса на прикрепление видео */
@@ -138,6 +148,7 @@ model AudioAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление файла к сообщению. Должен быть единственным вложением в сообщении */
 model FileAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `file` */
   type: "file";
 
   /** Полезная нагрузка запроса на прикрепление файла */
@@ -146,6 +157,7 @@ model FileAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление стикера. Должен быть единственным вложением в сообщении */
 model StickerAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `sticker` */
   type: "sticker";
 
   /** Полезная нагрузка запроса на прикрепление стикера */
@@ -154,6 +166,7 @@ model StickerAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление карточки контакта к сообщению. Должен быть единственным вложением в сообщении */
 model ContactAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `contact` */
   type: "contact";
 
   /** Полезная нагрузка запроса на прикрепление карточки контакта */
@@ -162,6 +175,7 @@ model ContactAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление клавиатуры к сообщению */
 model InlineKeyboardAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `inline_keyboard` */
   type: "inline_keyboard";
 
   /** Полезная нагрузка запроса на прикрепление клавиатуры */
@@ -176,6 +190,7 @@ model InlineKeyboardAttachmentRequest extends AttachmentRequest {
  * приём, что и для `ChatButton`).
  */
 model ReplyKeyboardAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `reply_keyboard` */
   type: "reply_keyboard";
 
   /** Применимо только для чатов. Если `true`, клавиатура будет показана только тому, кто упомянул или ответил боту */
@@ -194,6 +209,7 @@ model ReplyKeyboardAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление вложения географического положения */
 model LocationAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `location` */
   type: "location";
 
   /** Широта */
@@ -205,6 +221,7 @@ model LocationAttachmentRequest extends AttachmentRequest {
 
 /** Запрос на прикрепление предпросмотра медиафайла по внешнему URL */
 model ShareAttachmentRequest extends AttachmentRequest {
+  /** Тип вложения: `share` */
   type: "share";
 
   /** Полезная нагрузка запроса на прикрепление предпросмотра ссылки */

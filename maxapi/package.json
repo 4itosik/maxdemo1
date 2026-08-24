@@ -4,7 +4,9 @@
   "private": true,
   "description": "TypeSpec-описание Max Bot API (https://dev.max.ru/docs-api)",
   "scripts": {
-    "test": "tsp compile . && python3 scripts/seal_additional_properties.py && python3 scripts/compare.py"
+    "test": "npm run build && npm run validate && python3 scripts/compare.py",
+    "build": "tsp compile . && python3 scripts/seal_additional_properties.py && python3 scripts/fill_inherited_stubs.py",
+    "validate": "python3 scripts/validate_kb.py -q"
   },
   "devDependencies": {
     "@typespec/compiler": "^1.13.0",

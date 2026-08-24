@@ -46,6 +46,7 @@ model Chat {
   /** Отображаемое название чата или канала. Может быть `null` для диалогов */
   // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
   @maxLength(200)
+  @pattern("^[\\w\\W]{0,200}$")
   title: string | null;
 
   /** Иконка чата или канала */
@@ -75,11 +76,13 @@ model Chat {
   /** Ссылка на чат */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   link?: string | null;
 
   /** Описание чата или канала */
   // 400 — официальный лимит описания чата (ChatButton.chat_description)
   @maxLength(400)
+  @pattern("^[\\w\\W]{0,400}$")
   description: string | null;
 
   /** Данные о пользователе в диалоге (только для чатов типа `"dialog"`) */
@@ -115,6 +118,7 @@ model ChatPatch {
   // 200 — значение из официальной схемы MAX
   @minLength(1)
   @maxLength(200)
+  @pattern("^[\\w\\W]{1,200}$")
   title?: string | null;
 
   // Инлайн (а не scalar MessageId): для nullable-юниона `MessageId | null`
@@ -167,6 +171,7 @@ model ChatMember extends UserWithPhoto {
    * настройках чата или канала рядом с именем пользователя
    */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   `alias`?: string;
 }
 
@@ -192,6 +197,7 @@ model ChatAdmin {
    * настройках чата или канала рядом с именем пользователя
    */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   `alias`?: string;
 }
 
@@ -259,6 +265,7 @@ model FailedUserDetails {
    * — пользователи не найдены
    */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   error_code: string;
 
   /** ID пользователей с данной ошибкой */

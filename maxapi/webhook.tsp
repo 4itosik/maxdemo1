@@ -92,6 +92,7 @@ model UpdateUnified {
 
   /** Текущий язык пользователя (IETF BCP 47), доступен только в диалогах. [bot_started, bot_stopped, dialog_cleared, dialog_muted, dialog_unmuted, dialog_removed, message_created, message_callback] */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string | null;
 
   /** Признак «событие в канале, а не в чате». [bot_added, bot_removed, user_added, user_removed] */
@@ -106,11 +107,13 @@ model UpdateUnified {
   /** Новое название чата. [chat_title_changed] */
   // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
   @maxLength(200)
+  @pattern("^[\\w\\W]{0,200}$")
   title?: string;
 
   /** Данные из диплинка, переданные при запуске бота. [bot_started] */
   // 512 — значение из официальной схемы MAX (BotStartedUpdate.payload)
   @maxLength(512)
+  @pattern("^[\\w\\W]{0,512}$")
   payload?: string | null;
 
   /** До какого времени отключены уведомления (Unix-время). [dialog_muted] */
@@ -145,6 +148,7 @@ model UpdateUnified {
   /** Полезная нагрузка кнопки чата. [message_chat_created] */
   // 512 — официальный лимит источника значения (ChatButton.start_payload)
   @maxLength(512)
+  @pattern("^[\\w\\W]{0,512}$")
   start_payload?: string | null;
 }
 

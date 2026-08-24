@@ -24,6 +24,7 @@ model Update {
 
 /** Вы получите это событие, как только сообщение будет создано */
 model MessageCreatedUpdate extends Update {
+  /** Тип события: `message_created` */
   update_type: "message_created";
 
   /** Новое созданное сообщение */
@@ -31,11 +32,13 @@ model MessageCreatedUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47. Доступно только в диалогах */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string | null;
 }
 
 /** Вы получите это событие, как только пользователь нажмёт кнопку */
 model MessageCallbackUpdate extends Update {
+  /** Тип события: `message_callback` */
   update_type: "message_callback";
 
   /** Нажатая пользователем кнопка */
@@ -49,11 +52,13 @@ model MessageCallbackUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string | null;
 }
 
 /** Вы получите это событие, как только пользователь отредактирует сообщение */
 model MessageEditedUpdate extends Update {
+  /** Тип события: `message_edited` */
   update_type: "message_edited";
 
   /** Отредактированное сообщение */
@@ -62,6 +67,7 @@ model MessageEditedUpdate extends Update {
 
 /** Вы получите это событие, как только сообщение будет удалено */
 model MessageRemovedUpdate extends Update {
+  /** Тип события: `message_removed` */
   update_type: "message_removed";
 
   /** ID удалённого сообщения */
@@ -131,15 +137,18 @@ model BotStartedUpdate extends Update {
   /** Дополнительные данные из диплинков, переданные при запуске бота */
   // 512 — значение из официальной схемы MAX
   @maxLength(512)
+  @pattern("^[\\w\\W]{0,512}$")
   payload?: string | null;
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string;
 }
 
 /** Вы получите это событие, как только пользователь остановит бота в его настройках в МАКС */
 model BotStoppedUpdate extends Update {
+  /** Тип события: `bot_stopped` */
   update_type: "bot_stopped";
 
   /** ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -152,11 +161,13 @@ model BotStoppedUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string;
 }
 
 /** Вы получите это событие, как только будет изменено название чата */
 model ChatTitleChangedUpdate extends Update {
+  /** Тип события: `chat_title_changed` */
   update_type: "chat_title_changed";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -170,11 +181,13 @@ model ChatTitleChangedUpdate extends Update {
   /** Новое название */
   // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
   @maxLength(200)
+  @pattern("^[\\w\\W]{0,200}$")
   title: string;
 }
 
 /** Вы получите это событие, как только пользователь очистит историю сообщений */
 model DialogClearedUpdate extends Update {
+  /** Тип события: `dialog_cleared` */
   update_type: "dialog_cleared";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -187,6 +200,7 @@ model DialogClearedUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string;
 }
 
@@ -195,6 +209,7 @@ model DialogClearedUpdate extends Update {
  * новых сообщениях в диалоге с ботом
  */
 model DialogMutedUpdate extends Update {
+  /** Тип события: `dialog_muted` */
   update_type: "dialog_muted";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -212,6 +227,7 @@ model DialogMutedUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string;
 }
 
@@ -220,6 +236,7 @@ model DialogMutedUpdate extends Update {
  * новых сообщениях в диалоге с ботом
  */
 model DialogUnmutedUpdate extends Update {
+  /** Тип события: `dialog_unmuted` */
   update_type: "dialog_unmuted";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -232,11 +249,13 @@ model DialogUnmutedUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string;
 }
 
 /** Вы получите это событие, как только пользователь удалит чат */
 model DialogRemovedUpdate extends Update {
+  /** Тип события: `dialog_removed` */
   update_type: "dialog_removed";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -249,6 +268,7 @@ model DialogRemovedUpdate extends Update {
 
   /** Текущий язык пользователя в формате IETF BCP 47 */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   user_locale?: string;
 }
 
@@ -257,6 +277,7 @@ model DialogRemovedUpdate extends Update {
  * где бот является администратором
  */
 model UserAddedToChatUpdate extends Update {
+  /** Тип события: `user_added` */
   update_type: "user_added";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -284,6 +305,7 @@ model UserAddedToChatUpdate extends Update {
  * где бот является администратором
  */
 model UserRemovedFromChatUpdate extends Update {
+  /** Тип события: `user_removed` */
   update_type: "user_removed";
 
   /** ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id» */
@@ -316,6 +338,7 @@ model UserRemovedFromChatUpdate extends Update {
  * `message_chat_created` в scripts/compare.py.
  */
 model MessageChatCreatedUpdate extends Update {
+  /** Тип события: `message_chat_created` */
   update_type: "message_chat_created";
 
   /** Созданный чат */
@@ -327,6 +350,7 @@ model MessageChatCreatedUpdate extends Update {
   /** Полезная нагрузка от кнопки чата */
   // 512 — официальный лимит источника значения (ChatButton.start_payload)
   @maxLength(512)
+  @pattern("^[\\w\\W]{0,512}$")
   start_payload?: string | null;
 }
 
@@ -352,6 +376,7 @@ model Subscription {
   /** URL вебхука */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   url: string;
 
   /** Unix-время, когда была создана подписка */

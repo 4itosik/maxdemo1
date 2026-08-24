@@ -42,14 +42,17 @@ scalar SafeInt64 extends int64;
 model Error {
   /** Ошибка */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   error?: string;
 
   /** Код ошибки */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   code: string;
 
   /** Читаемое описание ошибки */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   message: string;
 }
 
@@ -60,6 +63,7 @@ model SimpleQueryResult {
 
   /** Объяснительное сообщение, если результат не был успешным */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   message?: string;
 }
 
@@ -68,6 +72,7 @@ model Image {
   /** URL изображения */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   url: string;
 }
 

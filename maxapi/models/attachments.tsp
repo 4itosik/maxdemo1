@@ -21,6 +21,7 @@ model AttachmentPayload {
    */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   url: string;
 }
 
@@ -34,11 +35,13 @@ model PhotoAttachmentPayload {
   /** Токен вложения */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token: string;
 
   /** URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   url: string;
 }
 
@@ -47,6 +50,7 @@ model MediaAttachmentPayload extends AttachmentPayload {
   /** Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token: string;
 }
 
@@ -55,6 +59,7 @@ model FileAttachmentPayload extends AttachmentPayload {
   /** Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token: string;
 }
 
@@ -63,6 +68,7 @@ model ContactAttachmentPayload {
   /** Информация о пользователе в формате VCF */
   // 4096 — в оригинале лимита нет; запас под VCF-карточку
   @maxLength(4096)
+  @pattern("^[\\w\\W]{0,4096}$")
   vcf_info?: string | null;
 
   /**
@@ -71,6 +77,7 @@ model ContactAttachmentPayload {
    * аккаунту в МАКС. Подробнее — в разделе «Типы кнопок»
    */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   hash?: string | null;
 
   /** Информация о пользователе */
@@ -81,6 +88,7 @@ model ContactAttachmentPayload {
 model StickerAttachmentPayload extends AttachmentPayload {
   /** ID стикера */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   code: string;
 }
 
@@ -90,11 +98,13 @@ model ShareAttachmentPayload {
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @minLength(1)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{1,2048}$")
   url?: string | null;
 
   /** Токен вложения */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token?: string | null;
 }
 
@@ -103,6 +113,7 @@ model VideoThumbnail {
   /** URL изображения */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   url: string;
 }
 
@@ -115,30 +126,37 @@ model VideoThumbnail {
 model VideoUrls {
   /** URL видео в разрешении 1080p, если доступно */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   mp4_1080?: string | null;
 
   /** URL видео в разрешении 720p, если доступно */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   mp4_720?: string | null;
 
   /** URL видео в разрешении 480p, если доступно */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   mp4_480?: string | null;
 
   /** URL видео в разрешении 360p, если доступно */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   mp4_360?: string | null;
 
   /** URL видео в разрешении 240p, если доступно */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   mp4_240?: string | null;
 
   /** URL видео в разрешении 144p, если доступно */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   mp4_144?: string | null;
 
   /** URL трансляции, если доступна */
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   hls?: string | null;
 }
 
@@ -147,6 +165,7 @@ model VideoAttachmentDetails {
   /** Токен видео-вложения */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   token: string;
 
   /** URL-ы для скачивания или воспроизведения видео. Может быть `null`, если видео недоступно */
@@ -173,6 +192,7 @@ model VideoAttachmentDetails {
 
 /** Вложение изображения */
 model PhotoAttachment extends Attachment {
+  /** Тип вложения: `image` */
   type: "image";
 
   /** Полезная нагрузка фото-вложения */
@@ -181,6 +201,7 @@ model PhotoAttachment extends Attachment {
 
 /** Вложение видео */
 model VideoAttachment extends Attachment {
+  /** Тип вложения: `video` */
   type: "video";
 
   /** Полезная нагрузка видео-вложения */
@@ -218,12 +239,13 @@ model AudioAttachment extends Attachment {
   // транскрипция длинного голосового (до 60 мин) в этот лимит не влезет —
   // при включении фичи поднять лимит и длину в pattern (в оригинале лимита нет).
   @maxLength(255)
-  @pattern("^[\\s\\S]{0,255}$")
+  @pattern("^[\\w\\W]{0,255}$")
   transcription?: string | null;
 }
 
 /** Вложение файла */
 model FileAttachment extends Attachment {
+  /** Тип вложения: `file` */
   type: "file";
 
   /** Полезная нагрузка файлового вложения */
@@ -231,6 +253,7 @@ model FileAttachment extends Attachment {
 
   /** Имя загруженного файла */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   filename: string;
 
   /** Размер файла в байтах */
@@ -241,6 +264,7 @@ model FileAttachment extends Attachment {
 
 /** Вложение стикера */
 model StickerAttachment extends Attachment {
+  /** Тип вложения: `sticker` */
   type: "sticker";
 
   /** Полезная нагрузка вложения-стикера */
@@ -259,6 +283,7 @@ model StickerAttachment extends Attachment {
 
 /** Вложение с карточкой контакта */
 model ContactAttachment extends Attachment {
+  /** Тип вложения: `contact` */
   type: "contact";
 
   /** Полезная нагрузка вложения-контакта */
@@ -267,6 +292,7 @@ model ContactAttachment extends Attachment {
 
 /** Кнопки в сообщении */
 model InlineKeyboardAttachment extends Attachment {
+  /** Тип вложения: `inline_keyboard` */
   type: "inline_keyboard";
 
   /** Полезная нагрузка клавиатуры */
@@ -275,6 +301,7 @@ model InlineKeyboardAttachment extends Attachment {
 
 /** Вложение с предпросмотром ссылки */
 model ShareAttachment extends Attachment {
+  /** Тип вложения: `share` */
   type: "share";
 
   /** Полезная нагрузка предпросмотра ссылки */
@@ -282,20 +309,24 @@ model ShareAttachment extends Attachment {
 
   /** Заголовок предпросмотра ссылки */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   title?: string | null;
 
   /** Описание предпросмотра ссылки */
   @maxLength(255)
+  @pattern("^[\\w\\W]{0,255}$")
   description?: string | null;
 
   /** Изображение предпросмотра ссылки */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   image_url?: string | null;
 }
 
 /** Вложение географического положения */
 model LocationAttachment extends Attachment {
+  /** Тип вложения: `location` */
   type: "location";
 
   /** Широта */
@@ -313,11 +344,13 @@ model LocationAttachment extends Attachment {
  * для `ChatButton`).
  */
 model DataAttachment extends Attachment {
+  /** Тип вложения: `data` */
   type: "data";
 
   /** Полезная нагрузка, отправленная через SendMessageButton */
   // 1024 — официальный лимит источника значения (ReplyButton.payload, maxLength 1024 в оригинале)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   data: string;
 }
 
@@ -329,6 +362,7 @@ model DataAttachment extends Attachment {
  * приём, что и для `ChatButton`).
  */
 model ReplyKeyboardAttachment extends Attachment {
+  /** Тип вложения: `reply_keyboard` */
   type: "reply_keyboard";
 
   /** Массив рядов с кнопками */

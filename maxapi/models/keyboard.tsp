@@ -28,31 +28,37 @@ model Button {
   // 128 — значение из официальной схемы MAX
   @minLength(1)
   @maxLength(128)
+  @pattern("^[\\w\\W]{1,128}$")
   text: string;
 }
 
 /** После нажатия на такую кнопку клиент отправляет на сервер полезную нагрузку */
 model CallbackButton extends Button {
+  /** Тип кнопки: `callback` */
   type: "callback";
 
   /** Токен кнопки */
   // 1024 — значение из официальной схемы MAX
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   payload: string;
 }
 
 /** После нажатия на такую кнопку пользователь переходит по ссылке, которую она содержит */
 model LinkButton extends Button {
+  /** Тип кнопки: `link` */
   type: "link";
 
   /** Ссылка */
   // 2048 — значение из официальной схемы MAX
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   url: string;
 }
 
 /** После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя */
 model RequestGeoLocationButton extends Button {
+  /** Тип кнопки: `request_geo_location` */
   type: "request_geo_location";
 
   /** Если `true`, отправляет местоположение без запроса подтверждения пользователя */
@@ -61,6 +67,7 @@ model RequestGeoLocationButton extends Button {
 
 /** После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя */
 model RequestContactButton extends Button {
+  /** Тип кнопки: `request_contact` */
   type: "request_contact";
 }
 
@@ -74,21 +81,25 @@ model RequestContactButton extends Button {
  * конвенции соседних ключей (тот же приём, что и для `DataAttachment`).
  */
 model ChatButton extends Button {
+  /** Тип кнопки: `chat` */
   type: "chat";
 
   /** Название чата, который будет создан */
   // 200 — значение из официальной схемы MAX
   @maxLength(200)
+  @pattern("^[\\w\\W]{0,200}$")
   chat_title: string;
 
   /** Описание чата */
   // 400 — значение из официальной схемы MAX
   @maxLength(400)
+  @pattern("^[\\w\\W]{0,400}$")
   chat_description?: string | null;
 
   /** Стартовая полезная нагрузка будет отправлена боту, как только чат будет создан */
   // 512 — значение из официальной схемы MAX
   @maxLength(512)
+  @pattern("^[\\w\\W]{0,512}$")
   start_payload?: string | null;
 
   /**
@@ -104,11 +115,13 @@ model ChatButton extends Button {
 
 /** Кнопка для запуска мини-приложения */
 model OpenAppButton extends Button {
+  /** Тип кнопки: `open_app` */
   type: "open_app";
 
   /** Публичное имя (username) бота или ссылка на него, чьё мини-приложение надо запустить */
   // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
+  @pattern("^[\\w\\W]{0,2048}$")
   web_app?: string;
 
   /** Идентификатор бота, чьё мини-приложение надо запустить */
@@ -119,21 +132,25 @@ model OpenAppButton extends Button {
   /** Параметр запуска, который будет передан в initData мини-приложения */
   // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   payload?: string;
 }
 
 /** При нажатии на кнопку с типом `clipboard` текст, указанный в свойстве `payload`, копируется в буфер обмена */
 model ClipboardButton extends Button {
+  /** Тип кнопки: `clipboard` */
   type: "clipboard";
 
   /** Текст, который будет скопирован */
   // 1024 — значение из официальной схемы MAX
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   payload: string;
 }
 
 /** Кнопка, при нажатии на которую от лица пользователя в чат отправляется указанный текст */
 model MessageButton extends Button {
+  /** Тип кнопки: `message` */
   type: "message";
 }
 
@@ -157,21 +174,25 @@ model ReplyButton {
   // 128 — значение из официальной схемы MAX
   @minLength(1)
   @maxLength(128)
+  @pattern("^[\\w\\W]{1,128}$")
   text: string;
 
   /** Токен кнопки */
   // 1024 — значение из официальной схемы MAX
   @maxLength(1024)
+  @pattern("^[\\w\\W]{0,1024}$")
   payload?: string | null;
 }
 
 /** После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой */
 model SendMessageButton extends ReplyButton {
+  /** Тип кнопки: `message` */
   type: "message";
 }
 
 /** После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя */
 model SendGeoLocationButton extends ReplyButton {
+  /** Тип кнопки: `user_geo_location` */
   type: "user_geo_location";
 
   /** Если `true`, отправляет местоположение без запроса подтверждения пользователя */
@@ -180,5 +201,6 @@ model SendGeoLocationButton extends ReplyButton {
 
 /** После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя */
 model SendContactButton extends ReplyButton {
+  /** Тип кнопки: `user_contact` */
   type: "user_contact";
 }

@@ -1,4 +1,4 @@
-.PHONY: all install build test compare clean
+.PHONY: all install build test compare validate clean
 
 all: build
 
@@ -11,11 +11,15 @@ install: node_modules
 build: node_modules
 	npx tsp compile .
 	python3 scripts/seal_additional_properties.py
+	python3 scripts/fill_inherited_stubs.py
 
 compare: build
 	python3 scripts/compare.py
 
-test: compare
+validate: build
+	python3 scripts/validate_kb.py -q
+
+test: validate compare
 
 clean:
 	rm -rf tsp-output
