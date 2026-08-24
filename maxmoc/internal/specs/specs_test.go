@@ -157,9 +157,10 @@ func TestValidateResponse(t *testing.T) {
 	}
 }
 
-// Контракт объявляет ChatType как enum ["chat"], хотя реальный Max отдаёт
-// "dialog" для диалогов. Загрузчик расширяет enum — проверяем, что оба
-// значения проходят.
+// В 0.0.32 ChatType был enum ["chat"] и отвергал каждое событие диалога, а
+// загрузчик расширял enum на лету. В 0.0.33 это строка с ограничениями по
+// форме, костыля больше нет — проверяем, что оба реальных значения проходят,
+// а произвольная строка по-прежнему нет.
 func TestChatTypeDialogAccepted(t *testing.T) {
 	s := load(t)
 	ctx := context.Background()
@@ -242,5 +243,69 @@ func TestWebhookBodyCheckedAgainstStrictBranch(t *testing.T) {
 		if err := s.ValidateWebhookBody(ctx, []byte(body)); err == nil {
 			t.Errorf("%s: тело прошло валидацию — строгая ветвь не проверяется", name)
 		}
+	}
+}
+
+// Подписка на http:// — сознательное отступление мока от контракта ради
+// закрытого контура (см. allowHTTPWebhookURL). Проверяется здесь, а не
+// только в maxfacade: послабление наносится на сам документ, и «сломать» его
+// можно, не трогая фасад — достаточно обновить спеку.
+func TestSubscriptionAcceptsHTTPURL(t *testing.T) {
+	s := load(t)
+	ctx := context.Background()
+
+	post := func(url string) error {
+		r := httptest.NewRequest("POST", "http://localhost:8080/subscriptions",
+			strings.NewReader(`{"url":"`+url+`"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "x")
+		route, params, err := s.FindRoute(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s.ValidateRequest(ctx, r, route, params)
+	}
+	del := func(url string) error {
+		r := httptest.NewRequest("DELETE", "http://localhost:8080/subscriptions?url="+url, nil)
+		r.Header.Set("Authorization", "x")
+		route, params, err := s.FindRoute(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s.ValidateRequest(ctx, r, route, params)
+	}
+
+	// Снять подписку должно быть можно ровно там, где её приняли: иначе
+	// http-адрес остаётся в моке навсегда.
+	for _, url := range []string{"https://stand.local/hook", "http://stand.local:8081/hook"} {
+		if err := post(url); err != nil {
+			t.Errorf("подписка на %s отвергнута: %v", url, err)
+		}
+		if err := del(url); err != nil {
+			t.Errorf("отписка от %s отвергнута: %v", url, err)
+		}
+	}
+
+	// Послабление касается только схемы: форма адреса проверяется по-прежнему.
+	for _, url := range []string{"ftp://stand.local/hook", "stand.local/hook", "https://"} {
+		if err := post(url); err == nil {
+			t.Errorf("подписка на %q принята — проверка формы адреса потеряна", url)
+		}
+	}
+}
+
+// Послабление наносится на паттерн, а не отменяет его: если контракт
+// перепишут, загрузчик обязан упасть, а не молча оставить мок строгим.
+func TestRelaxURLSchemeRejectsUnexpectedPattern(t *testing.T) {
+	s := load(t)
+	url := s.BotAPI.Components.Schemas["SubscriptionRequestBody"].Value.Properties["url"]
+	if url.Value.Pattern != anyWebhookURL {
+		t.Fatalf("pattern после загрузки = %q, ожидался %q", url.Value.Pattern, anyWebhookURL)
+	}
+	if err := relaxURLScheme("проверка", url); err == nil {
+		t.Error("повторное послабление не заметило чужого паттерна")
+	}
+	if err := relaxURLScheme("проверка", nil); err == nil {
+		t.Error("отсутствие поля не считается ошибкой")
 	}
 }

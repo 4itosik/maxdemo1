@@ -73,7 +73,7 @@ func requestOptions() *openapi3filter.Options {
 	}
 }
 
-func loadDoc(name string) (*openapi3.T, error) {
+func loadDoc(name string, adjust ...func(*openapi3.T) error) (*openapi3.T, error) {
 	b, err := api.FS.ReadFile(name)
 	if err != nil {
 		return nil, fmt.Errorf("чтение %s: %w", name, err)
@@ -84,6 +84,13 @@ func loadDoc(name string) (*openapi3.T, error) {
 		return nil, fmt.Errorf("разбор %s: %w", name, err)
 	}
 	normalizeAuthSchemes(doc)
+	// Правки наносятся до Validate: документ должен пройти проверку ровно в
+	// том виде, в котором по нему потом валидируются запросы.
+	for _, fn := range adjust {
+		if err := fn(doc); err != nil {
+			return nil, fmt.Errorf("правка %s: %w", name, err)
+		}
+	}
 	// Примеры в спеке снабжены ремарками и не обязаны проходить валидацию схем.
 	if err := doc.Validate(loader.Context,
 		openapi3.DisableExamplesValidation(),
@@ -111,9 +118,74 @@ func normalizeAuthSchemes(doc *openapi3.T) {
 	}
 }
 
+// Адрес вебхука в контракте: `https://` и ничего больше.
+const (
+	httpsWebhookURL = `^https://.+$`
+	anyWebhookURL   = `^https?://.+$`
+)
+
+// allowHTTPWebhookURL разрешает подписку на `http://`-адрес.
+//
+// Это не починка артефакта, а сознательное отступление мока от контракта —
+// такое же, как паритет авторизации: контракт здесь прав (живой Max требует
+// HTTPS, и `pattern` лишь переносит это требование из описания поля в
+// проверяемую форму), но мок ставят в закрытый контур, где стенды КЦ живут
+// на открытом HTTP, а выпустить им сертификат зачастую негде и некому.
+// Отвергая такую подписку, мок становится в контуре неприменим — а он ровно
+// для контура и сделан (docs/specs/2026-08-05-max-mock-design.md).
+//
+// Послабление минимальное: схема становится необязательной (`https?`), но
+// проверка формы остаётся — строка без схемы или с чужой (`ftp://`, «адрес
+// стенда») отвергается по-прежнему. Принятую http-подписку мок помечает в
+// поле `message` ответа, чтобы отступление было видно вызывающему, а не
+// только здесь (см. maxfacade.subscribe).
+//
+// Правятся оба места, где адрес приходит от бота: тело POST /subscriptions и
+// query-параметр DELETE /subscriptions. Пропустить второе значило бы принять
+// подписку, которую потом нельзя снять.
+func allowHTTPWebhookURL(doc *openapi3.T) error {
+	body := doc.Components.Schemas["SubscriptionRequestBody"]
+	if body == nil || body.Value == nil {
+		return errors.New("в контракте нет схемы SubscriptionRequestBody")
+	}
+	if err := relaxURLScheme("SubscriptionRequestBody.url", body.Value.Properties["url"]); err != nil {
+		return err
+	}
+
+	item := doc.Paths.Find("/subscriptions")
+	if item == nil || item.Delete == nil {
+		return errors.New("в контракте нет операции DELETE /subscriptions")
+	}
+	for _, p := range item.Delete.Parameters {
+		if p.Value != nil && p.Value.Name == "url" {
+			return relaxURLScheme("DELETE /subscriptions?url", p.Value.Schema)
+		}
+	}
+	return errors.New("у DELETE /subscriptions нет параметра url")
+}
+
+// relaxURLScheme заменяет паттерн одного поля-адреса.
+//
+// Несовпадение исходного паттерна — ошибка запуска, а не повод молча ничего
+// не сделать: контракт переписали, и отступление нужно перепроверить, а не
+// обнаружить однажды по отвергнутой подписке. Именно так это послабление и
+// пропало в 0.0.33 — вместе с паттерном в контракте появилась ветка кода,
+// до которой перестал доходить запрос.
+func relaxURLScheme(where string, ref *openapi3.SchemaRef) error {
+	if ref == nil || ref.Value == nil {
+		return fmt.Errorf("в контракте нет поля %s", where)
+	}
+	if ref.Value.Pattern != httpsWebhookURL {
+		return fmt.Errorf("%s: ожидался pattern %s, в контракте %q — послабление для http:// нужно перепроверить",
+			where, httpsWebhookURL, ref.Value.Pattern)
+	}
+	ref.Value.Pattern = anyWebhookURL
+	return nil
+}
+
 // Load читает оба контракта из embed.FS и строит роутеры.
 func Load() (*Specs, error) {
-	bot, err := loadDoc(api.BotAPIFile)
+	bot, err := loadDoc(api.BotAPIFile, allowHTTPWebhookURL)
 	if err != nil {
 		return nil, err
 	}

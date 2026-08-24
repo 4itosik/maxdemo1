@@ -518,6 +518,45 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	}
 }
 
+// Подписку на http:// мок принимает, хотя контракт требует https: стенды
+// закрытого контура живут на открытом HTTP, и отказ сделал бы мок там
+// неприменимым (см. specs.allowHTTPWebhookURL). Отступление помечается в
+// поле message ответа, а снять такую подписку должно быть можно тем же
+// DELETE — иначе адрес остаётся в моке навсегда.
+func TestSubscriptionAcceptsHTTPURL(t *testing.T) {
+	f := newFixture(t)
+	const url = "http://stand.local:8081/hook"
+
+	resp, body := f.do(t, "POST", "/subscriptions", `{"url":"`+url+`","secret":"abcdef"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("подписка на http:// отвергнута: %d %s", resp.StatusCode, body)
+	}
+	var res wire.SimpleQueryResult
+	if err := json.Unmarshal(body, &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.Success {
+		t.Errorf("подписка не удалась: %s", body)
+	}
+	if !strings.Contains(res.Message, "http://") {
+		t.Errorf("отступление от контракта не помечено в ответе: %q", res.Message)
+	}
+
+	resp, body = f.do(t, "DELETE", "/subscriptions?url="+url, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("отписка от http:// отвергнута: %d %s", resp.StatusCode, body)
+	}
+
+	// Послабление касается только схемы адреса.
+	resp, body = f.do(t, "POST", "/subscriptions", `{"url":"ftp://stand.local/hook"}`)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("подписка на ftp:// принята: %d %s", resp.StatusCode, body)
+	}
+	if code := decodeError(t, body).Code; code != CodeValidation {
+		t.Errorf("код: %s", code)
+	}
+}
+
 // Секрет подписки должен пройти валидацию по контракту: pattern запрещает
 // пробелы и кириллицу.
 func TestSubscriptionSecretPattern(t *testing.T) {

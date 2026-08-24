@@ -55,10 +55,14 @@ type waiter struct {
 
 func newStand(t *testing.T, sp *specs.Specs) *stand {
 	s := &stand{t: t, specs: sp}
-	// Контракт требует https у webhook-URL подписки (SubscriptionRequestBody.url,
-	// pattern ^https://.+$), поэтому стенд поднимается по TLS. Сертификат
-	// самоподписанный — мок доверяет ему через Webhook.InsecureSkipVerify
-	// (см. newMock).
+	// Стенд поднимается по TLS: контракт требует https у webhook-URL подписки
+	// (SubscriptionRequestBody.url, pattern ^https://.+$), и сквозной тест
+	// идёт этим — основным — путём. Сертификат самоподписанный, мок доверяет
+	// ему через Webhook.InsecureSkipVerify (см. newMock).
+	//
+	// Подписка на http:// тоже принимается — послабление ради закрытого
+	// контура (specs.allowHTTPWebhookURL), — но проверяется отдельно, в
+	// maxfacade и specs: здесь важнее покрыть доставку на https-стенд.
 	s.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
