@@ -88,19 +88,30 @@ func load(name string) (*openapi3.T, error) {
 	return doc, nil
 }
 
-// webhookSchema — схема тела единственной операции webhook-контракта.
+// strictUpdateSchema — строгая ветвь контракта вебхука: oneOf из 16
+// конкретных типов событий с дискриминатором по update_type. То же имя
+// использует internal/specs при проверке исходящих событий мока.
+const strictUpdateSchema = "WebhookUpdate"
+
+// webhookSchema — схема, против которой сверяются снятые события.
+//
+// Берётся НЕ тело операции, хотя оно и описывает приём события. Тело
+// объявлено как `anyOf: [UpdateUnified, WebhookUpdate]` — две равноправные
+// формы на выбор разработчика бота (см. «Дискриминированные union'ы» в
+// maxapi/README.md), и плоская UpdateUnified требует всего update_type и
+// timestamp. `anyOf` проходит при совпадении хотя бы одной ветви, так что
+// через неё регресс принял бы за корректные `message_created` без `message`,
+// `bot_started` без `chat_id` и `user`, событие с несуществующим
+// update_type — и отрапортовал бы «0 расхождений» на снимке, полном мусора.
+//
+// Смысл этой команды ровно обратный: показать, где контракт расходится с
+// тем, что платформа присылает на самом деле. Поэтому сверка идёт с самой
+// строгой формулировкой контракта, какая в нём есть.
 func webhookSchema(doc *openapi3.T) (*openapi3.SchemaRef, error) {
-	for _, item := range doc.Paths.Map() {
-		for _, op := range item.Operations() {
-			if op.RequestBody == nil || op.RequestBody.Value == nil {
-				continue
-			}
-			if mt := op.RequestBody.Value.Content.Get("application/json"); mt != nil {
-				return mt.Schema, nil
-			}
-		}
+	if ref := doc.Components.Schemas[strictUpdateSchema]; ref != nil && ref.Value != nil {
+		return ref, nil
 	}
-	return nil, fmt.Errorf("в webhook-контракте нет операции с телом application/json")
+	return nil, fmt.Errorf("в webhook-контракте нет схемы %s", strictUpdateSchema)
 }
 
 func main() {

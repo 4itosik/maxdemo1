@@ -206,3 +206,41 @@ func TestValidateWebhookBody(t *testing.T) {
 		}
 	}
 }
+
+// TestWebhookBodyCheckedAgainstStrictBranch закрепляет, что мок не полагается
+// на снисходительную ветвь anyOf при проверке собственных событий.
+//
+// Тело операции вебхука описано как `anyOf: [UpdateUnified, WebhookUpdate]` —
+// две формы на выбор разработчика бота. Плоская UpdateUnified требует только
+// update_type и timestamp, а `anyOf` проходит при совпадении хотя бы одной
+// ветви: без отдельной сверки со строгой ветвью через неё пролезает событие
+// без обязательных полей своего типа, с неизвестным update_type и даже смесь
+// полей от разных вариантов. Мок порождает события, а не принимает их, и
+// обязан держать себя строже (см. ValidateWebhookBody).
+func TestWebhookBodyCheckedAgainstStrictBranch(t *testing.T) {
+	s := load(t)
+	ctx := context.Background()
+
+	const user = `{"user_id":42,"first_name":"Клиент","is_bot":false,` +
+		`"last_activity_time":1722800000000,"name":"Клиент"}`
+
+	ok := []byte(`{"update_type":"bot_started","timestamp":1722800000000,"chat_id":7,"user":` + user + `}`)
+	if err := s.ValidateWebhookBody(ctx, ok); err != nil {
+		t.Fatalf("валидный bot_started отвергнут: %v", err)
+	}
+
+	// Каждое тело удовлетворяет UpdateUnified и потому проходило бы anyOf.
+	for name, body := range map[string]string{
+		"bot_started без chat_id и user":        `{"update_type":"bot_started","timestamp":1722800000000}`,
+		"message_created без message":           `{"update_type":"message_created","timestamp":1722800000000}`,
+		"user_added без chat_id и is_channel":   `{"update_type":"user_added","timestamp":1722800000000}`,
+		"chat_title_changed без title":          `{"update_type":"chat_title_changed","timestamp":1722800000000,"chat_id":7,"user":` + user + `}`,
+		"update_type, которого нет в контракте": `{"update_type":"unknown_event","timestamp":1722800000000}`,
+		"поля message_callback у bot_started": `{"update_type":"bot_started","timestamp":1722800000000,"chat_id":7,` +
+			`"user":` + user + `,"callback":{"timestamp":1722800000000,"callback_id":"cb","user":` + user + `}}`,
+	} {
+		if err := s.ValidateWebhookBody(ctx, []byte(body)); err == nil {
+			t.Errorf("%s: тело прошло валидацию — строгая ветвь не проверяется", name)
+		}
+	}
+}

@@ -232,6 +232,17 @@ CONSTRAINTS = [
 
 diffs = []
 
+# Полиморфизм описан в двух разных формах, см. cmp_schema():
+#   ALLOF_VARIANTS — имена наследников дискриминаторных баз оригинала
+#                    (форма «база-объект + allOf-ссылка на неё у наследника»);
+#   ONEOF_VARIANTS — имена вариантов наших дискриминированных union'ов
+#                    (каноническая форма «oneOf + discriminator» на базе,
+#                    её делает scripts/flatten_discriminated_unions.py).
+# Заполняются в main() по загруженным документам. На нерасплющенной схеме
+# ONEOF_VARIANTS пуст — вся связанная с ним логика сверки не срабатывает.
+ALLOF_VARIANTS = set()
+ONEOF_VARIANTS = set()
+
 
 def report(path, msg):
     diffs.append(f"{path}: {msg}")
@@ -285,6 +296,51 @@ def flatten(s, root):
     return merged
 
 
+def ref_name(ref):
+    """Имя схемы из строки `#/components/schemas/<Имя>` (или None)."""
+    return ref.rsplit("/", 1)[-1] if isinstance(ref, str) else None
+
+
+def is_disc_union(s):
+    """Дискриминированный union в канонической форме OpenAPI: oneOf + discriminator."""
+    return isinstance(s, dict) and "oneOf" in s and "discriminator" in s
+
+
+def union_refs(s):
+    """Имена схем-вариантов из oneOf."""
+    return [ref_name(p["$ref"]) for p in s.get("oneOf") or []
+            if isinstance(p, dict) and "$ref" in p]
+
+
+def mapping_refs(s):
+    """Имена схем, на которые указывает discriminator.mapping.
+
+    Значения mapping бывают и строкой-$ref, и объектом {"$ref": ...} —
+    см. нормализацию в cmp_schema().
+    """
+    mapping = (s.get("discriminator") or {}).get("mapping") or {}
+    return [ref_name(v["$ref"] if isinstance(v, dict) else v) for v in mapping.values()]
+
+
+def allof_variant_names(doc):
+    """Наследники дискриминаторных баз (форма оригинала: allOf-ссылка на базу)."""
+    schemas = (doc.get("components") or {}).get("schemas") or {}
+    bases = {n for n, s in schemas.items() if isinstance(s, dict) and "discriminator" in s}
+    return {n for n, s in schemas.items() if isinstance(s, dict)
+            and any(isinstance(p, dict) and ref_name(p.get("$ref")) in bases
+                    for p in (s.get("allOf") or []))}
+
+
+def oneof_variant_names(doc):
+    """Варианты наших дискриминированных union'ов (форма oneOf + discriminator)."""
+    schemas = (doc.get("components") or {}).get("schemas") or {}
+    out = set()
+    for s in schemas.values():
+        if is_disc_union(s):
+            out.update(n for n in union_refs(s) if n)
+    return out
+
+
 def norm_int(v):
     if isinstance(v, str) and v.lstrip("-").isdigit():
         return int(v)
@@ -319,13 +375,37 @@ def constraints_of(s):
 def cmp_schema(a, b, ra, rb, path, seen, is_disc_prop=False):
     na = a.get("$ref") if isinstance(a, dict) else None
     nb = b.get("$ref") if isinstance(b, dict) else None
+    # Пара «вариант дискриминированного union'а»: слева наследник базы через
+    # allOf (форма оригинала), справа — участник oneOf (наша форма). У такой
+    # пары НЕЛЬЗЯ сравнивать discriminator: в форме оригинала он затекает в
+    # наследника через allOf (flatten() сливает ключи базы в наследника), а в
+    # нашей остаётся только на базе — там он и сверяется. Иначе каждый вариант
+    # даёт ложное `discriminator: X vs None` плюс всю таблицу mapping целиком —
+    # ~700 расхождений на пустом месте.
+    # Оба варианта сюда попадают по голому $ref: и из цикла по
+    # components.schemas, и из обхода discriminator.mapping базы.
+    variant_pair = ref_name(na) in ALLOF_VARIANTS and ref_name(nb) in ONEOF_VARIANTS
     if na or nb:
         key = (na, nb)
         if key in seen:
             return
         seen.add(key)
     a, b = flatten(a, ra), flatten(b, rb)
+    # То же расхождение форм на уровне самой базы: у нас `oneOf` + discriminator,
+    # у оригинала — объект со свойствами базы + discriminator. Собственных
+    # `properties`/`required` у oneOf-базы нет и быть не может: они
+    # продублированы в КАЖДОМ варианте (scripts/fill_inherited_stubs.py +
+    # scripts/flatten_discriminated_unions.py) и сверяются повариантно, где
+    # flatten() подмешивает свойства базы оригинала в её наследника. Поэтому
+    # здесь сравниваем только состав вариантов и сам дискриминатор — потеря
+    # покрытия нулевая: пропажа любого свойства базы всплывёт на каждом из
+    # вариантов.
+    union_pair = is_disc_union(b) and not is_disc_union(a)
     ca, cb = constraints_of(a), constraints_of(b)
+    if union_pair:
+        for c in (ca, cb):
+            c.pop("required", None)
+            c.pop("type", None)
     # Дискриминатор-литералы: TypeSpec `type: "callback"` компилируется в
     # {type: string, enum: [callback]} на наследнике; оригинал почти всегда
     # просто наследует нетипизированное строковое поле базовой схемы, не
@@ -350,7 +430,7 @@ def cmp_schema(a, b, ra, rb, path, seen, is_disc_prop=False):
     # протаскивает discriminator базовой схемы в наследников через allOf,
     # так что это доступно и на развёрнутых дочерних схемах.
     disc_prop = (a.get("discriminator") or {}).get("propertyName") or (b.get("discriminator") or {}).get("propertyName")
-    for k in sorted(set(pa) | set(pb)):
+    for k in () if union_pair else sorted(set(pa) | set(pb)):
         if k not in pb:
             report(f"{path}.{k}", "свойства нет у нас")
         elif k not in pa:
@@ -366,6 +446,17 @@ def cmp_schema(a, b, ra, rb, path, seen, is_disc_prop=False):
         cmp_schema(ap, bp, ra, rb, f"{path}{{}}", seen)
     elif ap != bp:
         report(path, f"additionalProperties: официально {ap!r}, у нас {bp!r}")
+    if union_pair:
+        # Состав oneOf обязан совпадать с discriminator.mapping: mapping сам
+        # сверяется с оригиналом ниже, и эта проверка замыкает цепочку
+        # «наследники оригинала -> его mapping -> наш mapping -> наш oneOf».
+        # Без неё потерянный или лишний вариант в oneOf прошёл бы незамеченным.
+        refs, mapped = set(union_refs(b)), set(mapping_refs(b))
+        for n in sorted(refs ^ mapped):
+            where = "oneOf" if n in refs else "discriminator.mapping"
+            report(path, f"вариант {n} есть только в {where}")
+    if variant_pair:
+        return
     da = a.get("discriminator", {})
     db = b.get("discriminator", {})
     if da.get("propertyName") != db.get("propertyName"):
@@ -398,6 +489,8 @@ def main():
         print(f"Нет {OURS.relative_to(ROOT)} — сначала выполните: npx tsp compile .")
         sys.exit(2)
     off, ours = load(OFFICIAL), load(OURS)
+    ALLOF_VARIANTS.update(allof_variant_names(off))
+    ONEOF_VARIANTS.update(oneof_variant_names(ours))
     seen = set()
 
     # 1. Пути и операции

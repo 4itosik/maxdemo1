@@ -59,15 +59,18 @@ paths:
 components:
   schemas:
     MaxBotApi.Attachment:
-      type: object
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          maxLength: 64
-          pattern: ^[a-z_]+$
-          description: Тип вложения. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+      oneOf:
+        - $ref: '#/components/schemas/MaxBotApi.PhotoAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.VideoAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.AudioAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.FileAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.StickerAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.ContactAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.InlineKeyboardAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.ShareAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.LocationAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.DataAttachment'
+        - $ref: '#/components/schemas/MaxBotApi.ReplyKeyboardAttachment'
       discriminator:
         propertyName: type
         mapping:
@@ -124,8 +127,6 @@ components:
             Аудио транскрипция. 255 — в оригинале лимита нет; временный лимит, пока
             транскрипции не используются
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение аудио
     MaxBotApi.BotAddedToChatUpdate:
       type: object
@@ -134,6 +135,7 @@ components:
         - chat_id
         - user
         - is_channel
+        - timestamp
       properties:
         update_type:
           type: string
@@ -160,8 +162,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только бот будет добавлен в чат или канал
     MaxBotApi.BotRemovedFromChatUpdate:
       type: object
@@ -170,6 +170,7 @@ components:
         - chat_id
         - user
         - is_channel
+        - timestamp
       properties:
         update_type:
           type: string
@@ -196,8 +197,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только бот будет удалён из чата
     MaxBotApi.BotStartedUpdate:
       type: object
@@ -205,6 +204,7 @@ components:
         - update_type
         - chat_id
         - user
+        - timestamp
       properties:
         update_type:
           type: string
@@ -239,8 +239,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: |-
         Вы получите это событие, как только пользователь начнёт или возобновит
         общение с ботом: нажмёт соответствующую кнопку в настройках бота в МАКС
@@ -250,6 +248,7 @@ components:
         - update_type
         - chat_id
         - user
+        - timestamp
       properties:
         update_type:
           type: string
@@ -278,26 +277,17 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только пользователь остановит бота в его настройках в МАКС
     MaxBotApi.Button:
-      type: object
-      required:
-        - type
-        - text
-      properties:
-        type:
-          type: string
-          maxLength: 64
-          pattern: ^[a-z_]+$
-          description: Тип кнопки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
-        text:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[\w\W]{1,128}$
-          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      oneOf:
+        - $ref: '#/components/schemas/MaxBotApi.CallbackButton'
+        - $ref: '#/components/schemas/MaxBotApi.LinkButton'
+        - $ref: '#/components/schemas/MaxBotApi.RequestGeoLocationButton'
+        - $ref: '#/components/schemas/MaxBotApi.RequestContactButton'
+        - $ref: '#/components/schemas/MaxBotApi.ChatButton'
+        - $ref: '#/components/schemas/MaxBotApi.OpenAppButton'
+        - $ref: '#/components/schemas/MaxBotApi.ClipboardButton'
+        - $ref: '#/components/schemas/MaxBotApi.MessageButton'
       discriminator:
         propertyName: type
         mapping:
@@ -350,6 +340,7 @@ components:
       required:
         - type
         - payload
+        - text
       properties:
         type:
           type: string
@@ -368,8 +359,6 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: После нажатия на такую кнопку клиент отправляет на сервер полезную нагрузку
     MaxBotApi.Chat:
       type: object
@@ -479,6 +468,7 @@ components:
       required:
         - type
         - chat_title
+        - text
       properties:
         type:
           type: string
@@ -519,8 +509,6 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: |-
         Кнопка, которая создает новый чат, как только первый пользователь на нее нажмёт.
         Бот будет добавлен в участники чата как администратор.
@@ -544,6 +532,7 @@ components:
         - chat_id
         - user
         - title
+        - timestamp
       properties:
         update_type:
           type: string
@@ -572,8 +561,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только будет изменено название чата
     MaxBotApi.ChatType:
       type: string
@@ -602,6 +589,7 @@ components:
       required:
         - type
         - payload
+        - text
       properties:
         type:
           type: string
@@ -620,8 +608,6 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: При нажатии на кнопку с типом `clipboard` текст, указанный в свойстве `payload`, копируется в буфер обмена
     MaxBotApi.ContactAttachment:
       type: object
@@ -639,8 +625,6 @@ components:
             - $ref: '#/components/schemas/MaxBotApi.ContactAttachmentPayload'
           description: Полезная нагрузка вложения-контакта
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение с карточкой контакта
     MaxBotApi.ContactAttachmentPayload:
       type: object
@@ -685,8 +669,6 @@ components:
           pattern: ^[\w\W]{0,1024}$
           description: Полезная нагрузка, отправленная через SendMessageButton. 1024 — официальный лимит источника значения (ReplyButton.payload, maxLength 1024 в оригинале)
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: |-
         Вложение, содержащее полезную нагрузку, отправленную через `SendMessageButton`.
 
@@ -699,6 +681,7 @@ components:
         - update_type
         - chat_id
         - user
+        - timestamp
       properties:
         update_type:
           type: string
@@ -727,8 +710,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только пользователь очистит историю сообщений
     MaxBotApi.DialogMutedUpdate:
       type: object
@@ -737,6 +718,7 @@ components:
         - chat_id
         - user
         - muted_until
+        - timestamp
       properties:
         update_type:
           type: string
@@ -771,8 +753,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: |-
         Вы получите это событие, как только пользователь отключит уведомления о
         новых сообщениях в диалоге с ботом
@@ -782,6 +762,7 @@ components:
         - update_type
         - chat_id
         - user
+        - timestamp
       properties:
         update_type:
           type: string
@@ -810,8 +791,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только пользователь удалит чат
     MaxBotApi.DialogUnmutedUpdate:
       type: object
@@ -819,6 +798,7 @@ components:
         - update_type
         - chat_id
         - user
+        - timestamp
       properties:
         update_type:
           type: string
@@ -847,8 +827,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: |-
         Вы получите это событие, как только пользователь включит уведомления о
         новых сообщениях в диалоге с ботом
@@ -856,6 +834,8 @@ components:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -875,8 +855,6 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет *курсив*
     MaxBotApi.FileAttachment:
       type: object
@@ -907,8 +885,6 @@ components:
           maximum: 9007199254740991
           description: Размер файла в байтах
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение файла
     MaxBotApi.FileAttachmentPayload:
       type: object
@@ -942,6 +918,8 @@ components:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -961,13 +939,13 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет заголовок
     MaxBotApi.HighlightedMarkup:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -987,8 +965,6 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет выделенный текст
     MaxBotApi.Image:
       type: object
@@ -1018,8 +994,6 @@ components:
             - $ref: '#/components/schemas/MaxBotApi.Keyboard'
           description: Полезная нагрузка клавиатуры
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Кнопки в сообщении
     MaxBotApi.Keyboard:
       type: object
@@ -1039,6 +1013,7 @@ components:
       required:
         - type
         - url
+        - text
       properties:
         type:
           type: string
@@ -1057,14 +1032,14 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: После нажатия на такую кнопку пользователь переходит по ссылке, которую она содержит
     MaxBotApi.LinkMarkup:
       type: object
       required:
         - type
         - url
+        - from
+        - length
       properties:
         type:
           type: string
@@ -1090,8 +1065,6 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет ссылку в тексте
     MaxBotApi.LinkedMessage:
       type: object
@@ -1144,33 +1117,19 @@ components:
           maximum: 180
           description: Долгота. Диапазон от -180 до 180 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение географического положения
     MaxBotApi.MarkupElement:
-      type: object
-      required:
-        - type
-        - from
-        - length
-      properties:
-        type:
-          type: string
-          maxLength: 64
-          pattern: ^[a-z_]+$
-          description: Тип элемента разметки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
-        from:
-          type: integer
-          format: int32
-          minimum: 0
-          maximum: 2147483647
-          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
-        length:
-          type: integer
-          format: int32
-          minimum: 0
-          maximum: 2147483647
-          description: Длина элемента разметки
+      oneOf:
+        - $ref: '#/components/schemas/MaxBotApi.StrongMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.EmphasizedMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.MonospacedMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.LinkMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.StrikethroughMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.UnderlineMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.UserMentionMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.HeadingMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.HighlightedMarkup'
+        - $ref: '#/components/schemas/MaxBotApi.QuoteMarkup'
       discriminator:
         propertyName: type
         mapping:
@@ -1317,6 +1276,7 @@ components:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1330,8 +1290,6 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: Кнопка, при нажатии на которую от лица пользователя в чат отправляется указанный текст
     MaxBotApi.MessageCallbackUpdate:
       type: object
@@ -1339,6 +1297,7 @@ components:
         - update_type
         - callback
         - message
+        - timestamp
       properties:
         update_type:
           type: string
@@ -1370,8 +1329,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только пользователь нажмёт кнопку
     MaxBotApi.MessageChatCreatedUpdate:
       type: object
@@ -1379,6 +1336,7 @@ components:
         - update_type
         - chat
         - message_id
+        - timestamp
       properties:
         update_type:
           type: string
@@ -1406,8 +1364,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: |-
         Вы получите это событие, как только пользователь нажмёт в сообщении на
         кнопку с типом `chat` и будет создан новый чат с ботом, связанный с этим
@@ -1421,6 +1377,7 @@ components:
       required:
         - update_type
         - message
+        - timestamp
       properties:
         update_type:
           type: string
@@ -1444,14 +1401,13 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только сообщение будет создано
     MaxBotApi.MessageEditedUpdate:
       type: object
       required:
         - update_type
         - message
+        - timestamp
       properties:
         update_type:
           type: string
@@ -1469,8 +1425,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только пользователь отредактирует сообщение
     MaxBotApi.MessageId:
       type: string
@@ -1497,6 +1451,7 @@ components:
         - message_id
         - chat_id
         - user_id
+        - timestamp
       properties:
         update_type:
           type: string
@@ -1526,8 +1481,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: Вы получите это событие, как только сообщение будет удалено
     MaxBotApi.MessageStat:
       type: object
@@ -1545,6 +1498,8 @@ components:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -1564,13 +1519,12 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет `моноширинный` или блок ```код``` в тексте
     MaxBotApi.OpenAppButton:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1600,8 +1554,6 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: Кнопка для запуска мини-приложения
     MaxBotApi.PhotoAttachment:
       type: object
@@ -1619,8 +1571,6 @@ components:
             - $ref: '#/components/schemas/MaxBotApi.PhotoAttachmentPayload'
           description: Полезная нагрузка фото-вложения
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение изображения
     MaxBotApi.PhotoAttachmentPayload:
       type: object
@@ -1651,6 +1601,8 @@ components:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -1670,8 +1622,6 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет цитату
     MaxBotApi.Recipient:
       type: object
@@ -1701,28 +1651,10 @@ components:
       additionalProperties: false
       description: Новый получатель сообщения. Может быть пользователем или чатом
     MaxBotApi.ReplyButton:
-      type: object
-      required:
-        - type
-        - text
-      properties:
-        type:
-          type: string
-          maxLength: 64
-          pattern: ^[a-z_]+$
-          description: Тип кнопки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
-        text:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[\w\W]{1,128}$
-          description: Видимый текст кнопки. 128 — значение из официальной схемы MAX
-        payload:
-          type: string
-          nullable: true
-          maxLength: 1024
-          pattern: ^[\w\W]{0,1024}$
-          description: Токен кнопки. 1024 — значение из официальной схемы MAX
+      oneOf:
+        - $ref: '#/components/schemas/MaxBotApi.SendMessageButton'
+        - $ref: '#/components/schemas/MaxBotApi.SendGeoLocationButton'
+        - $ref: '#/components/schemas/MaxBotApi.SendContactButton'
       discriminator:
         propertyName: type
         mapping:
@@ -1754,8 +1686,6 @@ components:
           maxItems: 100
           description: Массив рядов с кнопками
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: |-
         Пользовательская reply-клавиатура в сообщении.
 
@@ -1766,6 +1696,7 @@ components:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1779,13 +1710,12 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
     MaxBotApi.RequestGeoLocationButton:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1803,8 +1733,6 @@ components:
           pattern: ^[\w\W]{1,128}$
           description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Button'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
     MaxBotApi.SafeInt64:
       type: integer
@@ -1819,6 +1747,7 @@ components:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1838,13 +1767,12 @@ components:
           pattern: ^[\w\W]{0,1024}$
           description: Токен кнопки. 1024 — значение из официальной схемы MAX
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.ReplyButton'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
     MaxBotApi.SendGeoLocationButton:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1868,13 +1796,12 @@ components:
           pattern: ^[\w\W]{0,1024}$
           description: Токен кнопки. 1024 — значение из официальной схемы MAX
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.ReplyButton'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
     MaxBotApi.SendMessageButton:
       type: object
       required:
         - type
+        - text
       properties:
         type:
           type: string
@@ -1894,8 +1821,6 @@ components:
           pattern: ^[\w\W]{0,1024}$
           description: Токен кнопки. 1024 — значение из официальной схемы MAX
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.ReplyButton'
       description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
     MaxBotApi.ShareAttachment:
       type: object
@@ -1931,8 +1856,6 @@ components:
           pattern: ^[\w\W]{0,2048}$
           description: Изображение предпросмотра ссылки. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение с предпросмотром ссылки
     MaxBotApi.ShareAttachmentPayload:
       type: object
@@ -1980,8 +1903,6 @@ components:
           maximum: 2147483647
           description: Высота стикера
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение стикера
     MaxBotApi.StickerAttachmentPayload:
       type: object
@@ -2015,6 +1936,8 @@ components:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -2034,13 +1957,13 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет ~зачёркнутый~ текст
     MaxBotApi.StrongMarkup:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -2060,13 +1983,13 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет **жирный** текст
     MaxBotApi.UnderlineMarkup:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -2086,26 +2009,25 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет подчёркнутый текст
     MaxBotApi.Update:
-      type: object
-      required:
-        - update_type
-        - timestamp
-      properties:
-        update_type:
-          type: string
-          maxLength: 64
-          pattern: ^[a-z_]+$
-          description: Тип события. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
-        timestamp:
-          type: integer
-          format: int64
-          minimum: 0
-          maximum: 9007199254740991
-          description: Unix-время, когда произошло событие
+      oneOf:
+        - $ref: '#/components/schemas/MaxBotApi.MessageCallbackUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageEditedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageRemovedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotAddedToChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotRemovedFromChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotStartedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.BotStoppedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.ChatTitleChangedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogClearedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogMutedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogUnmutedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.DialogRemovedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.UserAddedToChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.UserRemovedFromChatUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageChatCreatedUpdate'
+        - $ref: '#/components/schemas/MaxBotApi.MessageCreatedUpdate'
       discriminator:
         propertyName: update_type
         mapping:
@@ -2193,6 +2115,7 @@ components:
         - chat_id
         - user
         - is_channel
+        - timestamp
       properties:
         update_type:
           type: string
@@ -2228,8 +2151,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: |-
         Вы получите это событие, как только пользователь будет добавлен в чат,
         где бот является администратором
@@ -2237,6 +2158,8 @@ components:
       type: object
       required:
         - type
+        - from
+        - length
       properties:
         type:
           type: string
@@ -2269,8 +2192,6 @@ components:
           maximum: 2147483647
           description: Длина элемента разметки
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.MarkupElement'
       description: Представляет упоминание пользователя в тексте. Упоминание может быть как по имени пользователя, так и по ID, если у пользователя нет имени
     MaxBotApi.UserRemovedFromChatUpdate:
       type: object
@@ -2279,6 +2200,7 @@ components:
         - chat_id
         - user
         - is_channel
+        - timestamp
       properties:
         update_type:
           type: string
@@ -2313,8 +2235,6 @@ components:
           maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Update'
       description: |-
         Вы получите это событие, как только пользователь будет удалён из чата,
         где бот является администратором
@@ -2380,8 +2300,6 @@ components:
           maximum: 2147483647
           description: Длина видео в секундах
       additionalProperties: false
-      allOf:
-        - $ref: '#/components/schemas/MaxBotApi.Attachment'
       description: Вложение видео
     MaxBotApi.VideoThumbnail:
       type: object
@@ -2523,6 +2441,25 @@ components:
         - $ref: '#/components/schemas/MaxBotApi.DialogRemovedUpdate'
         - $ref: '#/components/schemas/MaxBotApi.UserAddedToChatUpdate'
         - $ref: '#/components/schemas/MaxBotApi.UserRemovedFromChatUpdate'
+      discriminator:
+        propertyName: update_type
+        mapping:
+          message_created: '#/components/schemas/MaxBotApi.MessageCreatedUpdate'
+          message_callback: '#/components/schemas/MaxBotApi.MessageCallbackUpdate'
+          message_edited: '#/components/schemas/MaxBotApi.MessageEditedUpdate'
+          message_removed: '#/components/schemas/MaxBotApi.MessageRemovedUpdate'
+          message_chat_created: '#/components/schemas/MaxBotApi.MessageChatCreatedUpdate'
+          bot_added: '#/components/schemas/MaxBotApi.BotAddedToChatUpdate'
+          bot_removed: '#/components/schemas/MaxBotApi.BotRemovedFromChatUpdate'
+          bot_started: '#/components/schemas/MaxBotApi.BotStartedUpdate'
+          bot_stopped: '#/components/schemas/MaxBotApi.BotStoppedUpdate'
+          chat_title_changed: '#/components/schemas/MaxBotApi.ChatTitleChangedUpdate'
+          dialog_cleared: '#/components/schemas/MaxBotApi.DialogClearedUpdate'
+          dialog_muted: '#/components/schemas/MaxBotApi.DialogMutedUpdate'
+          dialog_unmuted: '#/components/schemas/MaxBotApi.DialogUnmutedUpdate'
+          dialog_removed: '#/components/schemas/MaxBotApi.DialogRemovedUpdate'
+          user_added: '#/components/schemas/MaxBotApi.UserAddedToChatUpdate'
+          user_removed: '#/components/schemas/MaxBotApi.UserRemovedFromChatUpdate'
       description: |-
         Явный oneOf всех 16 типов событий — чтобы Swagger UI и генераторы
         показывали полный список вариантов, а не только базовые поля Update

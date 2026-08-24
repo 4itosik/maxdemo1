@@ -154,23 +154,24 @@ model UpdateUnified {
  * (allOf-наследование дискриминированного union'а UI не разворачивают).
  */
 @oneOf
+@discriminated(#{ envelope: "none", discriminatorPropertyName: "update_type" })
 union WebhookUpdate {
-  MaxBotApi.MessageCreatedUpdate,
-  MaxBotApi.MessageCallbackUpdate,
-  MaxBotApi.MessageEditedUpdate,
-  MaxBotApi.MessageRemovedUpdate,
-  MaxBotApi.MessageChatCreatedUpdate,
-  MaxBotApi.BotAddedToChatUpdate,
-  MaxBotApi.BotRemovedFromChatUpdate,
-  MaxBotApi.BotStartedUpdate,
-  MaxBotApi.BotStoppedUpdate,
-  MaxBotApi.ChatTitleChangedUpdate,
-  MaxBotApi.DialogClearedUpdate,
-  MaxBotApi.DialogMutedUpdate,
-  MaxBotApi.DialogUnmutedUpdate,
-  MaxBotApi.DialogRemovedUpdate,
-  MaxBotApi.UserAddedToChatUpdate,
-  MaxBotApi.UserRemovedFromChatUpdate,
+  message_created: MaxBotApi.MessageCreatedUpdate,
+  message_callback: MaxBotApi.MessageCallbackUpdate,
+  message_edited: MaxBotApi.MessageEditedUpdate,
+  message_removed: MaxBotApi.MessageRemovedUpdate,
+  message_chat_created: MaxBotApi.MessageChatCreatedUpdate,
+  bot_added: MaxBotApi.BotAddedToChatUpdate,
+  bot_removed: MaxBotApi.BotRemovedFromChatUpdate,
+  bot_started: MaxBotApi.BotStartedUpdate,
+  bot_stopped: MaxBotApi.BotStoppedUpdate,
+  chat_title_changed: MaxBotApi.ChatTitleChangedUpdate,
+  dialog_cleared: MaxBotApi.DialogClearedUpdate,
+  dialog_muted: MaxBotApi.DialogMutedUpdate,
+  dialog_unmuted: MaxBotApi.DialogUnmutedUpdate,
+  dialog_removed: MaxBotApi.DialogRemovedUpdate,
+  user_added: MaxBotApi.UserAddedToChatUpdate,
+  user_removed: MaxBotApi.UserRemovedFromChatUpdate,
 }
 
 /** Подтверждение приёма: платформа ожидает 200 OK без тела */

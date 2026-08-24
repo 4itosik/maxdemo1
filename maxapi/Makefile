@@ -14,6 +14,7 @@ build: node_modules
 	python3 scripts/fill_inherited_stubs.py
 	python3 scripts/apply_int_bounds.py
 	python3 scripts/prune_unused_schemas.py
+	python3 scripts/flatten_discriminated_unions.py
 
 compare: build
 	python3 scripts/compare.py

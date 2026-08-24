@@ -5,6 +5,7 @@ package specs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +24,10 @@ import (
 
 // ErrRouteNotFound — путь/метод отсутствует в контракте Bot API.
 var ErrRouteNotFound = errors.New("маршрут не описан в контракте")
+
+// strictUpdateSchema — имя строгой ветви контракта вебхука: oneOf из 16
+// конкретных типов событий с дискриминатором по update_type.
+const strictUpdateSchema = "WebhookUpdate"
 
 // Specs — загруженные контракты и построенные по ним роутеры.
 type Specs struct {
@@ -206,6 +211,21 @@ func (s *Specs) ValidateResponse(ctx context.Context, r *http.Request, route *ro
 
 // ValidateWebhookBody проверяет тело исходящего события против контракта
 // webhook-эндпоинта (openapi.MaxBotWebhook.yaml).
+//
+// Проверок две, и вторая обязательна. Тело операции описано как
+// `anyOf: [UpdateUnified, WebhookUpdate]` — две равноправные формы на выбор
+// РАЗРАБОТЧИКА БОТА: плоская схема, где обязательны только `update_type` и
+// `timestamp`, и строгий oneOf из 16 конкретных типов. Для приёмника это
+// удобство, но `anyOf` проходит, если совпала ХОТЬ ОДНА ветвь, — а значит
+// плоская форма делает необязательными 37 полей, которые обязательны у
+// конкретных событий. Через неё пролезает `message_created` без `message`,
+// `user_added` без `chat_id`, событие с неизвестным `update_type` и даже
+// смесь полей от разных вариантов.
+//
+// Мок обязан держать себя строже, чем контракт разрешает приёмнику: он не
+// принимает событие, а порождает его, и снисходительность здесь означала бы
+// молча отправленное на стенд событие, которого живой Max не присылает.
+// Поэтому вдобавок к операции тело сверяется напрямую со строгой ветвью.
 func (s *Specs) ValidateWebhookBody(ctx context.Context, body []byte) error {
 	req, err := http.NewRequest(s.webhookMethod, s.webhookURL, bytes.NewReader(body))
 	if err != nil {
@@ -216,11 +236,33 @@ func (s *Specs) ValidateWebhookBody(ctx context.Context, body []byte) error {
 	if err != nil {
 		return fmt.Errorf("маршрут webhook не найден: %w", err)
 	}
-	return openapi3filter.ValidateRequest(ctx, &openapi3filter.RequestValidationInput{
+	if err := openapi3filter.ValidateRequest(ctx, &openapi3filter.RequestValidationInput{
 		Request:     req,
 		PathParams:  params,
 		QueryParams: url.Values{},
 		Route:       route,
 		Options:     requestOptions(),
-	})
+	}); err != nil {
+		return err
+	}
+	return s.validateStrictUpdate(body)
+}
+
+// validateStrictUpdate сверяет событие со схемой WebhookUpdate — строгой
+// ветвью anyOf (см. ValidateWebhookBody).
+func (s *Specs) validateStrictUpdate(body []byte) error {
+	ref := s.Webhook.Components.Schemas[strictUpdateSchema]
+	if ref == nil || ref.Value == nil {
+		// Схема пропала из контракта — это ошибка сборки, а не повод
+		// незаметно ослабить проверку.
+		return fmt.Errorf("схема %s отсутствует в контракте webhook", strictUpdateSchema)
+	}
+	var v any
+	if err := json.Unmarshal(body, &v); err != nil {
+		return fmt.Errorf("тело события не разобрано: %w", err)
+	}
+	if err := s.Webhook.ValidateSchemaJSON(ref.Value, v); err != nil {
+		return fmt.Errorf("событие не соответствует %s: %w", strictUpdateSchema, err)
+	}
+	return nil
 }
