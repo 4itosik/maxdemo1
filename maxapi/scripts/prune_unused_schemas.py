@@ -11,7 +11,7 @@ SCHEMA-валидатора обратное: `Potentially unused component has 
      ChatMembersList, ChatAdminsList, UserIdsList, ModifyMembersResult,
      ActionRequestBody, PinMessageBody, GetPinnedMessageResult.
   2. Сироты, унаследованные от оригинальной схемы MAX, где на них тоже
-     никто не ссылается — BotPatch, Intent, PhotoTokens.
+     никто не ссылается — BotPatch, PhotoTokens.
   3. Модели, попадающие в webhook-документ «за компанию» с namespace,
      но не используемые ни одним его событием — BotInfo, ChatMember.
 

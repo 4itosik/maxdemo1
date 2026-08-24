@@ -1,11 +1,11 @@
 {
   "name": "max-bot-api-typespec",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "private": true,
   "description": "TypeSpec-описание Max Bot API (https://dev.max.ru/docs-api)",
   "scripts": {
     "test": "npm run build && npm run validate && python3 scripts/compare.py",
-    "build": "tsp compile . && python3 scripts/seal_additional_properties.py && python3 scripts/fill_inherited_stubs.py && python3 scripts/prune_unused_schemas.py",
+    "build": "tsp compile . && python3 scripts/seal_additional_properties.py && python3 scripts/fill_inherited_stubs.py && python3 scripts/apply_int_bounds.py && python3 scripts/prune_unused_schemas.py",
     "validate": "python3 scripts/validate_kb.py -q"
   },
   "devDependencies": {

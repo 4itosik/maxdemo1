@@ -18,8 +18,8 @@ func load(t *testing.T) *Specs {
 }
 
 func TestLoadReportsContractVersion(t *testing.T) {
-	if v := load(t).Version(); v != "0.0.32" {
-		t.Fatalf("версия контракта = %q, ожидалась 0.0.32", v)
+	if v := load(t).Version(); v != "0.0.33" {
+		t.Fatalf("версия контракта = %q, ожидалась 0.0.33", v)
 	}
 }
 

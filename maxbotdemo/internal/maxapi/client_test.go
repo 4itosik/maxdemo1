@@ -186,7 +186,7 @@ func TestSendMessageEncodesKeyboardAndFormat(t *testing.T) {
 		Attachments: []AttachmentRequest{{
 			Type: AttachmentInlineKeyboard,
 			Payload: &KeyboardPayload{Buttons: [][]Button{{
-				{Type: ButtonCallback, Text: "Да", Payload: "yes", Intent: IntentPositive},
+				{Type: ButtonCallback, Text: "Да", Payload: "yes"},
 			}}},
 		}},
 	})
@@ -202,7 +202,7 @@ func TestSendMessageEncodesKeyboardAndFormat(t *testing.T) {
 			"type": "inline_keyboard",
 			"payload": map[string]any{
 				"buttons": []any{[]any{map[string]any{
-					"type": "callback", "text": "Да", "payload": "yes", "intent": "positive",
+					"type": "callback", "text": "Да", "payload": "yes",
 				}}},
 			},
 		}},

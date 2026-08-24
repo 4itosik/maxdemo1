@@ -24,7 +24,7 @@ using OpenAPI;
 // TODO: contact — плейсхолдер (требование SCHEMA-валидатора: info.contact
 // обязателен); заменить на реальные контакты команды перед публикацией.
 @info(#{
-  version: "0.0.32",
+  version: "0.0.33",
   contact: #{
     name: "Max Bot API (placeholder)",
     url: "https://dev.max.ru/docs-api",

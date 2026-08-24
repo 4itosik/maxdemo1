@@ -1,7 +1,11 @@
 openapi: 3.0.0
 info:
   title: Max Bot API
-  version: 0.0.32
+  version: 0.0.33
+  contact:
+    name: Max Bot API (placeholder)
+    url: https://dev.max.ru/docs-api
+    email: bot-api-placeholder@example.com
   description: Бот-платформа мессенджера MAX. https://dev.max.ru/docs-api
 tags:
   - name: bots
@@ -22,11 +26,19 @@ paths:
         - name: callback_id
           in: query
           required: true
-          description: Идентификатор кнопки, на которую нажал пользователь
+          description: |-
+            Идентификатор кнопки, на которую нажал пользователь. 1024 — в оригинале
+            лимита нет; по аналогии с официальным лимитом кнопочного payload
+            (CallbackButton.payload).
+
+            Паттерн оригинала `^(?!\s*$).+` использует lookahead (не поддерживается
+            RE2-движками, в т.ч. СОВА) и пропускает любое непустое значение —
+            заменён на «любые непробельные символы».
           schema:
             type: string
-            pattern: ^(?!\s*$).+
+            pattern: ^\S{1,1024}$
             minLength: 1
+            maxLength: 1024
           explode: false
       responses:
         '200':
@@ -138,6 +150,8 @@ paths:
           schema:
             type: integer
             format: int64
+            minimum: 0
+            maximum: 9007199254740991
           explode: false
         - name: message_ids
           in: query
@@ -149,11 +163,13 @@ paths:
             ОТЛИЧИЕ ОТ ОРИГИНАЛА (осознанное, см. DEVIATIONS в scripts/compare.py):
             в оригинальной схеме этот параметр описан как массив без объявленного
             items вообще — недосмотр (тот же приём копипасты, что и у UserIdsList).
-            Мы транскрибируем содержательный смысл: массив строк.
+            Мы транскрибируем содержательный смысл: массив ID сообщений
+            (ограничения элементов и maxItems — по требованиям КБ).
           schema:
             type: array
             items:
-              type: string
+              $ref: '#/components/schemas/MessageId'
+            maxItems: 100
           explode: false
         - name: from
           in: query
@@ -162,6 +178,8 @@ paths:
           schema:
             type: integer
             format: int64
+            minimum: 0
+            maximum: 9007199254740991
           explode: false
         - name: to
           in: query
@@ -170,6 +188,8 @@ paths:
           schema:
             type: integer
             format: int64
+            minimum: 0
+            maximum: 9007199254740991
           explode: false
         - name: count
           in: query
@@ -224,6 +244,8 @@ paths:
           schema:
             type: integer
             format: int64
+            minimum: 0
+            maximum: 9007199254740991
           explode: false
         - name: chat_id
           in: query
@@ -232,6 +254,8 @@ paths:
           schema:
             type: integer
             format: int64
+            minimum: 0
+            maximum: 9007199254740991
           explode: false
         - name: disable_link_preview
           in: query
@@ -284,8 +308,7 @@ paths:
           required: true
           description: ID редактируемого сообщения
           schema:
-            type: string
-            minLength: 1
+            $ref: '#/components/schemas/MessageId'
           explode: false
       responses:
         '200':
@@ -329,8 +352,7 @@ paths:
           required: true
           description: ID удаляемого сообщения
           schema:
-            type: string
-            minLength: 1
+            $ref: '#/components/schemas/MessageId'
           explode: false
       responses:
         '200':
@@ -371,8 +393,7 @@ paths:
           required: true
           description: ID сообщения (`mid`), чтобы получить одно сообщение в чате
           schema:
-            type: string
-            pattern: '[a-zA-Z0-9_\-]+'
+            $ref: '#/components/schemas/MessageId'
       responses:
         '200':
           description: The request has succeeded.
@@ -467,9 +488,11 @@ paths:
         - name: url
           in: query
           required: true
-          description: URL, который нужно удалить из подписок на WebHook
+          description: URL, который нужно удалить из подписок на WebHook. Webhook-endpoint обязан начинаться с `https://`. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
           schema:
             type: string
+            pattern: ^https://.+$
+            maxLength: 2048
           explode: false
       responses:
         '200':
@@ -526,6 +549,8 @@ paths:
             type: integer
             format: int64
             nullable: true
+            minimum: 0
+            maximum: 9007199254740991
           explode: false
         - name: types
           in: query
@@ -534,8 +559,9 @@ paths:
           schema:
             type: array
             items:
-              type: string
+              $ref: '#/components/schemas/UpdateType'
             nullable: true
+            maxItems: 50
           explode: false
       responses:
         '200':
@@ -610,10 +636,19 @@ paths:
         - name: videoToken
           in: path
           required: true
-          description: Токен видео-вложения
+          description: |-
+            Токен видео-вложения.
+
+            Паттерн оригинала `[a-zA-Z0-9_\-]+` не заякорен и потому пропускает
+            любую строку с одним допустимым символом; заякорен и расширен до
+            типовых алфавитов токенов (base64/base64url/hex), maxLength — по
+            требованиям КБ: 1024 — в оригинале лимита нет, по аналогии с
+            официальным лимитом кнопочного payload (CallbackButton.payload).
+            См. DEVIATIONS в scripts/compare.py.
           schema:
             type: string
-            pattern: '[a-zA-Z0-9_\-]+'
+            pattern: ^[a-zA-Z0-9+/=._\-]+$
+            maxLength: 1024
       responses:
         '200':
           description: The request has succeeded.
@@ -652,16 +687,6 @@ security:
   - BearerAuth: []
 components:
   schemas:
-    ActionRequestBody:
-      type: object
-      required:
-        - action
-      properties:
-        action:
-          allOf:
-            - $ref: '#/components/schemas/SenderAction'
-          description: Действие, отправляемое участникам чата
-      description: Тело запроса на отправку действия отправителя (индикатор набора текста и т. п.)
     Attachment:
       type: object
       required:
@@ -669,7 +694,9 @@ components:
       properties:
         type:
           type: string
-          description: Тип вложения
+          maxLength: 64
+          pattern: ^[a-z_]+$
+          description: Тип вложения. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
       discriminator:
         propertyName: type
         mapping:
@@ -692,12 +719,15 @@ components:
       properties:
         url:
           type: string
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: |-
             URL медиа-вложения. Этот URL будет получен в объекте Update после
             отправки сообщения в чат.
 
             Прямую ссылку на видео также можно получить с помощью метода
-            `GET /videos/{-videoToken-}`
+            `GET /videos/{-videoToken-}`. 2048 — официальный лимит URL в оригинальной
+            схеме (LinkButton.url, LinkMarkup.url)
       description: Базовая полезная нагрузка медиа-вложения
     AttachmentRequest:
       type: object
@@ -706,7 +736,9 @@ components:
       properties:
         type:
           type: string
-          description: Тип вложения
+          maxLength: 64
+          pattern: ^[a-z_]+$
+          description: Тип вложения. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
       discriminator:
         propertyName: type
         mapping:
@@ -731,6 +763,7 @@ components:
           type: string
           enum:
             - audio
+          description: 'Тип вложения: `audio`'
         payload:
           allOf:
             - $ref: '#/components/schemas/MediaAttachmentPayload'
@@ -738,7 +771,12 @@ components:
         transcription:
           type: string
           nullable: true
-          description: Аудио транскрипция
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
+          description: |-
+            Аудио транскрипция. 255 — в оригинале лимита нет; временный лимит, пока
+            транскрипции не используются
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение аудио
@@ -752,10 +790,12 @@ components:
           type: string
           enum:
             - audio
+          description: 'Тип вложения: `audio`'
         payload:
           allOf:
             - $ref: '#/components/schemas/UploadedInfo'
           description: Полезная нагрузка запроса на прикрепление аудио
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление аудио к сообщению. Должен быть единственным вложением в сообщении
@@ -771,9 +811,12 @@ components:
           type: string
           enum:
             - bot_added
+          description: 'Тип события: `bot_added`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, куда был добавлен бот. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -782,6 +825,13 @@ components:
         is_channel:
           type: boolean
           description: Указывает, что бот добавлен в канал, а не в чат
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только бот будет добавлен в чат или канал
@@ -794,13 +844,16 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-          description: Название команды
+          pattern: ^[\w\W]{1,64}$
+          description: Название команды. 64 — значение из официальной схемы MAX; pattern — КБ-идиома «любой текст заданной длины»
         description:
           type: string
           nullable: true
           minLength: 1
           maxLength: 128
-          description: Описание команды
+          pattern: ^[\w\W]{1,128}$
+          description: Описание команды. 128 — значение из официальной схемы MAX; pattern — КБ-идиома «любой текст заданной длины»
+      additionalProperties: false
       description: Команда, поддерживаемая ботом
     BotCommandsInfo:
       type: object
@@ -811,6 +864,7 @@ components:
             $ref: '#/components/schemas/BotCommand'
           maxItems: 32
           description: Команды, которые поддерживает бот
+      additionalProperties: false
       description: Информация о командах бота
     BotCommandsPatch:
       type: object
@@ -821,6 +875,7 @@ components:
             $ref: '#/components/schemas/BotCommand'
           maxItems: 32
           description: Команды, которые поддерживает бот
+      additionalProperties: false
       description: Объект PATCH для обновления команд бота
     BotInfo:
       type: object
@@ -832,49 +887,64 @@ components:
           nullable: true
           maxItems: 32
           description: Команды, поддерживаемые ботом
-      allOf:
-        - $ref: '#/components/schemas/UserWithPhoto'
-      description: Объект включает общую информацию о боте, URL аватара и описание. Является наследником схемы UserWithPhoto. Дополнительно к ней содержит список команд, поддерживаемых ботом. Возвращается только при вызове метода `GET /me`
-    BotPatch:
-      type: object
-      properties:
-        first_name:
-          type: string
-          nullable: true
-          minLength: 1
-          maxLength: 64
-          description: Отображаемое имя пользователя или название бота
-        last_name:
-          type: string
-          nullable: true
-          minLength: 1
-          maxLength: 64
-          description: Отображаемое второе имя бота
-        name:
-          type: string
-          nullable: true
-          description: Поле устарело, скоро будет удалено. Используйте `first_name`
-          deprecated: true
         description:
           type: string
           nullable: true
-          minLength: 1
           maxLength: 16000
-          description: Описание бота
-        commands:
-          type: array
-          items:
-            $ref: '#/components/schemas/BotCommand'
+          pattern: ^[\w\W]{0,16000}$
+          description: Описание пользователя или бота. В случае с пользователем может принимать значение `null`, если описание не заполнено. 16000 — значение из официальной схемы MAX
+        avatar_url:
+          type: string
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL аватара пользователя или бота в уменьшенном размере. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+        full_avatar_url:
+          type: string
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL аватара пользователя или бота в полном размере. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+        user_id:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Идентификатор пользователя или бота
+        first_name:
+          type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
+          description: Отображаемое имя пользователя или бота
+        last_name:
+          type: string
           nullable: true
-          maxItems: 32
-          description: Команды, поддерживаемые ботом. Чтобы удалить все команды, передайте пустой список
-        photo:
-          type: object
-          allOf:
-            - $ref: '#/components/schemas/PhotoAttachmentRequestPayload'
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
+          description: Отображаемая фамилия пользователя. Для ботов это поле не возвращается
+        username:
+          type: string
           nullable: true
-          description: Запрос на установку фото бота
-      description: Параметры изменения свойств бота
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
+          description: Никнейм бота или уникальное публичное имя пользователя. В случае с пользователем может быть `null`, если тот недоступен или имя не задано
+        is_bot:
+          type: boolean
+          description: '`true`, если это бот'
+        last_activity_time:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Время последней активности пользователя или бота в MAX (Unix-время в миллисекундах). Если пользователь отключил в настройках профиля мессенджера MAX возможность видеть, что он в сети онлайн, поле может не возвращаться
+        name:
+          type: string
+          nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
+          description: Устаревшее поле, скоро будет удалено
+      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/UserWithPhoto'
+      description: Объект включает общую информацию о боте, URL аватара и описание. Является наследником схемы UserWithPhoto. Дополнительно к ней содержит список команд, поддерживаемых ботом. Возвращается только при вызове метода `GET /me`
     BotRemovedFromChatUpdate:
       type: object
       required:
@@ -887,9 +957,12 @@ components:
           type: string
           enum:
             - bot_removed
+          description: 'Тип события: `bot_removed`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, откуда был удалён бот. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -898,6 +971,13 @@ components:
         is_channel:
           type: boolean
           description: Указывает, что бот удалён из канала, а не из чата
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только бот будет удалён из чата
@@ -912,9 +992,12 @@ components:
           type: string
           enum:
             - bot_started
+          description: 'Тип события: `bot_started`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -924,10 +1007,20 @@ components:
           type: string
           nullable: true
           maxLength: 512
-          description: Дополнительные данные из диплинков, переданные при запуске бота
+          pattern: ^[\w\W]{0,512}$
+          description: Дополнительные данные из диплинков, переданные при запуске бота. 512 — значение из официальной схемы MAX
         user_locale:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: |-
@@ -944,9 +1037,12 @@ components:
           type: string
           enum:
             - bot_stopped
+          description: 'Тип события: `bot_stopped`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -954,24 +1050,36 @@ components:
           description: Пользователь, который остановил бота
         user_locale:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только пользователь остановит бота в его настройках в МАКС
     Button:
       type: object
       required:
-        - text
         - type
+        - text
       properties:
+        type:
+          type: string
+          maxLength: 64
+          pattern: ^[a-z_]+$
+          description: Тип кнопки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
         text:
           type: string
           minLength: 1
           maxLength: 128
-          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4'
-        type:
-          type: string
-          description: Discriminator property for Button.
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
       discriminator:
         propertyName: type
         mapping:
@@ -984,6 +1092,12 @@ components:
           clipboard: '#/components/schemas/ClipboardButton'
           message: '#/components/schemas/MessageButton'
       description: Кнопка клавиатуры
+    ButtonRowItem:
+      type: array
+      items:
+        $ref: '#/components/schemas/Button'
+      maxItems: 100
+      description: Ряд кнопок клавиатуры
     Callback:
       type: object
       required:
@@ -994,17 +1108,24 @@ components:
         timestamp:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Unix-время, когда пользователь нажал кнопку
         callback_id:
           type: string
-          description: Текущий ID клавиатуры
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Текущий ID клавиатуры. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
         payload:
           type: string
-          description: Токен кнопки
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: 'Токен кнопки. 1024 — официальный лимит источника значения: токен приходит из CallbackButton.payload (maxLength 1024 в оригинале)'
         user:
           allOf:
             - $ref: '#/components/schemas/User'
           description: Пользователь, нажавший на кнопку
+      additionalProperties: false
       description: Объект, отправленный боту, когда пользователь нажимает кнопку
     CallbackAnswer:
       type: object
@@ -1015,6 +1136,7 @@ components:
             - $ref: '#/components/schemas/NewMessageBody'
           nullable: true
           description: Заполните это, если хотите изменить текущее сообщение
+      additionalProperties: false
       description: Отправьте этот объект, когда ваш бот хочет отреагировать на нажатие кнопки
     CallbackButton:
       type: object
@@ -1026,10 +1148,19 @@ components:
           type: string
           enum:
             - callback
+          description: 'Тип кнопки: `callback`'
         payload:
           type: string
           maxLength: 1024
-          description: Токен кнопки
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен кнопки. 1024 — значение из официальной схемы MAX
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: После нажатия на такую кнопку клиент отправляет на сервер полезную нагрузку
@@ -1049,6 +1180,8 @@ components:
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата или канала — в зависимости от ограничений метода и от того, с чем вы работаете. Как получить ID — в разделе «Получение chat_id»
         type:
           allOf:
@@ -1061,7 +1194,9 @@ components:
         title:
           type: string
           nullable: true
-          description: Отображаемое название чата или канала. Может быть `null` для диалогов
+          maxLength: 200
+          pattern: ^[\w\W]{0,200}$
+          description: Отображаемое название чата или канала. Может быть `null` для диалогов. 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
         icon:
           type: object
           allOf:
@@ -1071,21 +1206,26 @@ components:
         last_event_time:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Время последнего события в чате или канале
         participants_count:
           type: integer
           format: int32
+          minimum: 0
+          maximum: 2147483647
           description: Количество участников чата или канала. Для диалогов всегда `2`
         owner_id:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: ID владельца чата или канала
         participants:
           type: object
           additionalProperties:
-            type: integer
-            format: int64
+            $ref: '#/components/schemas/SafeInt64'
           nullable: true
           description: Участники чата или канала с временем последней активности. Может быть `null`, если запрашивается список чатов
         is_public:
@@ -1094,11 +1234,15 @@ components:
         link:
           type: string
           nullable: true
-          description: Ссылка на чат
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: Ссылка на чат. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         description:
           type: string
           nullable: true
-          description: Описание чата или канала
+          maxLength: 400
+          pattern: ^[\w\W]{0,400}$
+          description: Описание чата или канала. 400 — официальный лимит описания чата (ChatButton.chat_description)
         dialog_with_user:
           type: object
           allOf:
@@ -1108,6 +1252,8 @@ components:
         messages_count:
           type: integer
           nullable: true
+          minimum: 0
+          maximum: 2147483647
           description: Количество сообщений в групповых чатах и каналах
         pinned_message:
           type: object
@@ -1115,69 +1261,12 @@ components:
             - $ref: '#/components/schemas/Message'
           nullable: true
           description: Закреплённое сообщение в чате (возвращается только при запросе конкретного чата или канала)
+      additionalProperties: false
       description: |-
         Объект содержит общую информацию о групповом чате или канале: его тип,
         настройки отображения (название, аватар, описание, ссылка), публичную
         доступность, а также информацию об участниках (владельце, боте и других
         пользователях), времени их последней активности и событиях
-    ChatAdmin:
-      type: object
-      required:
-        - user_id
-        - permissions
-      properties:
-        user_id:
-          type: integer
-          format: int64
-          description: Идентификатор пользователя-участника группового чата или канала, который назначается администратором. Максимум — 50 администраторов в чате
-        permissions:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatAdminPermission'
-          description: |-
-            Перечень прав доступа пользователя или бота, который назначается
-            администратором группового чата или канала. Если право назначается
-            действующему администратору, то его текущие права будут обновлены в
-            соответствии с переданным списком
-        alias:
-          type: string
-          description: |-
-            Описание роли, которое будет отображаться на клиентском устройстве в
-            настройках чата или канала рядом с именем пользователя
-      description: Назначить администратора группового чата или канала
-    ChatAdminPermission:
-      type: string
-      enum:
-        - read_all_messages
-        - add_remove_members
-        - add_admins
-        - change_chat_info
-        - pin_message
-        - write
-        - can_call
-        - edit_link
-        - post_edit_delete_message
-        - edit_message
-        - delete_message
-        - edit
-        - delete
-      description: Права администратора группового чата или канала
-    ChatAdminsList:
-      type: object
-      required:
-        - admins
-      properties:
-        admins:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatAdmin'
-          description: Список пользователей и ботов, которые получат права администратора группового чата или канала
-        marker:
-          type: integer
-          format: int64
-          nullable: true
-          description: Указатель на следующую страницу данных
-      description: Пагинированный список администраторов группового чата или канала
     ChatButton:
       type: object
       required:
@@ -1188,28 +1277,41 @@ components:
           type: string
           enum:
             - chat
+          description: 'Тип кнопки: `chat`'
         chat_title:
           type: string
           maxLength: 200
-          description: Название чата, который будет создан
+          pattern: ^[\w\W]{0,200}$
+          description: Название чата, который будет создан. 200 — значение из официальной схемы MAX
         chat_description:
           type: string
           nullable: true
           maxLength: 400
-          description: Описание чата
+          pattern: ^[\w\W]{0,400}$
+          description: Описание чата. 400 — значение из официальной схемы MAX
         start_payload:
           type: string
           nullable: true
           maxLength: 512
-          description: Стартовая полезная нагрузка будет отправлена боту, как только чат будет создан
+          pattern: ^[\w\W]{0,512}$
+          description: Стартовая полезная нагрузка будет отправлена боту, как только чат будет создан. 512 — значение из официальной схемы MAX
         uuid:
           type: integer
           nullable: true
+          minimum: 0
+          maximum: 2147483647
           description: |-
             Уникальный ID кнопки среди всех кнопок чата на клавиатуре.
             Если `uuid` изменён, новый чат будет создан при следующем нажатии.
             Сервер сгенерирует его в момент, когда кнопка будет впервые размещена.
             Используйте его при редактировании сообщения.
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: |-
@@ -1220,111 +1322,6 @@ components:
         В оригинальной схеме отсутствует в `Button.discriminator.mapping` — см.
         DEVIATIONS `mapping[chat]` в scripts/compare.py: литерал "chat" выведен по
         конвенции соседних ключей (тот же приём, что и для `DataAttachment`).
-    ChatList:
-      type: object
-      required:
-        - chats
-        - marker
-      properties:
-        chats:
-          type: array
-          items:
-            $ref: '#/components/schemas/Chat'
-          description: Список запрашиваемых чатов
-        marker:
-          type: integer
-          format: int64
-          nullable: true
-          description: Указатель на следующую страницу запрашиваемых чатов
-      description: Пагинированный список чатов
-    ChatMember:
-      type: object
-      required:
-        - last_access_time
-        - is_owner
-        - is_admin
-        - join_time
-        - permissions
-      properties:
-        last_access_time:
-          type: integer
-          format: int64
-          description: Время последней активности пользователя в чате. Может быть устаревшим для суперчатов (равно времени вступления)
-        is_owner:
-          type: boolean
-          description: Является ли пользователь владельцем группового чата или канала
-        is_admin:
-          type: boolean
-          description: Является ли пользователь администратором группового чата или канала
-        join_time:
-          type: integer
-          format: int64
-          description: Дата присоединения к чату в формате Unix time
-        permissions:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatAdminPermission'
-          nullable: true
-          description: |-
-            Перечень прав доступа пользователя или бота, если тот является
-            администратором группового чата или канала. Для обычных участников чата
-            или канала поле не возвращается
-        alias:
-          type: string
-          description: |-
-            Описание роли, которое будет отображаться на клиентском устройстве в
-            настройках чата или канала рядом с именем пользователя
-      allOf:
-        - $ref: '#/components/schemas/UserWithPhoto'
-      description: |-
-        Объект включает общую информацию о пользователе или боте, URL аватара и
-        описание (при наличии). Является наследником схемы UserWithPhoto.
-        Дополнительно к ней содержит данные для пользователей-участников чата или
-        канала. Возвращается только при вызове некоторых методов группы `/chats`
-    ChatMembersList:
-      type: object
-      required:
-        - members
-      properties:
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatMember'
-          description: |-
-            Список участников группового чата или канала с общей информацией о них,
-            а также временем последней активности и списком прав доступа для
-            пользователей и ботов, которые являются администраторами
-        marker:
-          type: integer
-          format: int64
-          nullable: true
-          description: Указатель на следующую страницу данных
-      description: Пагинированный список участников группового чата или канала
-    ChatPatch:
-      type: object
-      properties:
-        icon:
-          type: object
-          allOf:
-            - $ref: '#/components/schemas/PhotoAttachmentRequestPayload'
-          nullable: true
-          description: Запрос на изменение иконки чата или канала
-        title:
-          type: string
-          nullable: true
-          minLength: 1
-          maxLength: 200
-          description: Отображаемое название чата или канала
-        pin:
-          type: string
-          nullable: true
-          description: ID сообщения для закрепления в чате. Чтобы удалить закреплённое сообщение, используйте метод unpin
-        notify:
-          type: boolean
-          nullable: true
-          description: Если `true`, участники получат системное уведомление об изменении
-          default: true
-      description: Параметры изменения свойств чата или канала
     ChatStatus:
       type: string
       enum:
@@ -1345,9 +1342,12 @@ components:
           type: string
           enum:
             - chat_title_changed
+          description: 'Тип события: `chat_title_changed`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -1355,15 +1355,41 @@ components:
           description: Пользователь, который изменил название
         title:
           type: string
-          description: Новое название
+          maxLength: 200
+          pattern: ^[\w\W]{0,200}$
+          description: Новое название. 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только будет изменено название чата
     ChatType:
       type: string
-      enum:
-        - chat
-      description: 'Тип чата: диалог, чат'
+      maxLength: 64
+      pattern: ^[a-z_]+$
+      description: |-
+        Тип чата.
+
+        Известные значения: `dialog` — диалог «клиент ↔ бот», `chat` — групповой чат,
+        `channel` — канал. Разбирать их — задача кода, а не схемы.
+
+        ОТЛИЧИЕ ОТ ОРИГИНАЛА (осознанное, см. DEVIATIONS в scripts/compare.py):
+        оригинал объявляет это перечислением, и перечисление уже подводило. В 0.0.32
+        оно состояло из одного `chat`, хотя описание там же гласило «диалог, чат», а
+        живая платформа отдаёт `dialog` в каждом сообщении диалога: снятый с прода
+        регресс (см. maxbotdemo/README.md) отверг по этой причине все 15 событий.
+        В 0.0.33 набор дополнили до `chat`/`channel`/`dialog`, но сам способ остался
+        хрупким — любое следующее значение снова превратит корректный ответ MAX в
+        ошибку валидации у всех потребителей контракта.
+
+        Поэтому здесь строка с ограничениями по форме (требование КБ), а не
+        закрытый список. Схема перестаёт ломаться на расширении словаря, известные
+        значения задокументированы выше.
     ClipboardButton:
       type: object
       required:
@@ -1374,10 +1400,19 @@ components:
           type: string
           enum:
             - clipboard
+          description: 'Тип кнопки: `clipboard`'
         payload:
           type: string
           maxLength: 1024
-          description: Текст, который будет скопирован
+          pattern: ^[\w\W]{0,1024}$
+          description: Текст, который будет скопирован. 1024 — значение из официальной схемы MAX
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: При нажатии на кнопку с типом `clipboard` текст, указанный в свойстве `payload`, копируется в буфер обмена
@@ -1391,10 +1426,12 @@ components:
           type: string
           enum:
             - contact
+          description: 'Тип вложения: `contact`'
         payload:
           allOf:
             - $ref: '#/components/schemas/ContactAttachmentPayload'
           description: Полезная нагрузка вложения-контакта
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение с карточкой контакта
@@ -1404,10 +1441,14 @@ components:
         vcf_info:
           type: string
           nullable: true
-          description: Информация о пользователе в формате VCF
+          maxLength: 4096
+          pattern: ^[\w\W]{0,4096}$
+          description: Информация о пользователе в формате VCF. 4096 — в оригинале лимита нет; запас под VCF-карточку
         hash:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: |-
             Хеш информации о пользователе в формате VCF. Используется для проверки
             того, что пользователь поделился номером телефона, привязанным к его
@@ -1418,6 +1459,7 @@ components:
             - $ref: '#/components/schemas/User'
           nullable: true
           description: Информация о пользователе
+      additionalProperties: false
       description: Полезная нагрузка вложения-контакта
     ContactAttachmentRequest:
       type: object
@@ -1429,10 +1471,12 @@ components:
           type: string
           enum:
             - contact
+          description: 'Тип вложения: `contact`'
         payload:
           allOf:
             - $ref: '#/components/schemas/ContactAttachmentRequestPayload'
           description: Полезная нагрузка запроса на прикрепление карточки контакта
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление карточки контакта к сообщению. Должен быть единственным вложением в сообщении
@@ -1444,20 +1488,29 @@ components:
         name:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Имя контакта
         contact_id:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: ID контакта, если он зарегистрирован в MAX
         vcf_info:
           type: string
           nullable: true
-          description: Полная информация о контакте в формате VCF
+          maxLength: 4096
+          pattern: ^[\w\W]{0,4096}$
+          description: Полная информация о контакте в формате VCF. 4096 — в оригинале лимита нет; запас под VCF-карточку
         vcf_phone:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Телефон контакта в формате VCF
+      additionalProperties: false
       description: Полезная нагрузка запроса на прикрепление карточки контакта
     DataAttachment:
       type: object
@@ -1469,9 +1522,13 @@ components:
           type: string
           enum:
             - data
+          description: 'Тип вложения: `data`'
         data:
           type: string
-          description: Полезная нагрузка, отправленная через SendMessageButton
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Полезная нагрузка, отправленная через SendMessageButton. 1024 — официальный лимит источника значения (ReplyButton.payload, maxLength 1024 в оригинале)
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: |-
@@ -1491,9 +1548,12 @@ components:
           type: string
           enum:
             - dialog_cleared
+          description: 'Тип события: `dialog_cleared`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -1501,7 +1561,16 @@ components:
           description: Пользователь, который очистил историю сообщений
         user_locale:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только пользователь очистит историю сообщений
@@ -1517,9 +1586,12 @@ components:
           type: string
           enum:
             - dialog_muted
+          description: 'Тип события: `dialog_muted`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -1528,10 +1600,21 @@ components:
         muted_until:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Время в формате Unix, до наступления которого диалог был отключён
         user_locale:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: |-
@@ -1548,9 +1631,12 @@ components:
           type: string
           enum:
             - dialog_removed
+          description: 'Тип события: `dialog_removed`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -1558,7 +1644,16 @@ components:
           description: Пользователь, который удалил чат
         user_locale:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только пользователь удалит чат
@@ -1573,9 +1668,12 @@ components:
           type: string
           enum:
             - dialog_unmuted
+          description: 'Тип события: `dialog_unmuted`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -1583,7 +1681,16 @@ components:
           description: Пользователь, который включил уведомления
         user_locale:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: |-
@@ -1598,6 +1705,20 @@ components:
           type: string
           enum:
             - emphasized
+          description: 'Тип элемента разметки: `emphasized`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет *курсив*
@@ -1609,33 +1730,21 @@ components:
       properties:
         error:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Ошибка
         code:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Код ошибки
         message:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Читаемое описание ошибки
+      additionalProperties: false
       description: Сервер возвращает это, если возникло исключение при вашем запросе
-    FailedUserDetails:
-      type: object
-      required:
-        - error_code
-        - user_ids
-      properties:
-        error_code:
-          type: string
-          description: |-
-            Код ошибки. Возможные значения: `add.participant.privacy` — ошибки
-            конфиденциальности при добавлении пользователей; `add.participant.not.found`
-            — пользователи не найдены
-        user_ids:
-          type: array
-          items:
-            type: integer
-            format: int64
-          description: ID пользователей с данной ошибкой
-      description: Подробное описание, почему пользователь не был добавлен в групповой чат или канал
     FileAttachment:
       type: object
       required:
@@ -1648,17 +1757,23 @@ components:
           type: string
           enum:
             - file
+          description: 'Тип вложения: `file`'
         payload:
           allOf:
             - $ref: '#/components/schemas/FileAttachmentPayload'
           description: Полезная нагрузка файлового вложения
         filename:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Имя загруженного файла
         size:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Размер файла в байтах
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение файла
@@ -1669,7 +1784,24 @@ components:
       properties:
         token:
           type: string
-          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+        url:
+          type: string
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: 'URL медиа-вложения. Этот URL будет получен в объекте Update после
+
+            отправки сообщения в чат.
+
+
+            Прямую ссылку на видео также можно получить с помощью метода
+
+            `GET /videos/{-videoToken-}`. 2048 — официальный лимит URL в оригинальной
+
+            схеме (LinkButton.url, LinkMarkup.url)'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentPayload'
       description: Полезная нагрузка файлового вложения
@@ -1683,23 +1815,15 @@ components:
           type: string
           enum:
             - file
+          description: 'Тип вложения: `file`'
         payload:
           allOf:
             - $ref: '#/components/schemas/UploadedInfo'
           description: Полезная нагрузка запроса на прикрепление файла
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление файла к сообщению. Должен быть единственным вложением в сообщении
-    GetPinnedMessageResult:
-      type: object
-      properties:
-        message:
-          type: object
-          allOf:
-            - $ref: '#/components/schemas/Message'
-          nullable: true
-          description: Закреплённое сообщение. Может быть `null`, если в чате нет закреплённого сообщения
-      description: Результат запроса закреплённого сообщения
     GetSubscriptionsResult:
       type: object
       required:
@@ -1709,7 +1833,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Subscription'
+          maxItems: 100
           description: Список текущих подписок
+      additionalProperties: false
       description: Список всех WebHook подписок
     HeadingMarkup:
       type: object
@@ -1720,6 +1846,20 @@ components:
           type: string
           enum:
             - heading
+          description: 'Тип элемента разметки: `heading`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет заголовок
@@ -1732,6 +1872,20 @@ components:
           type: string
           enum:
             - highlighted
+          description: 'Тип элемента разметки: `highlighted`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет выделенный текст
@@ -1742,7 +1896,10 @@ components:
       properties:
         url:
           type: string
-          description: URL изображения
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL изображения. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+      additionalProperties: false
       description: Общая схема, описывающая объект изображения
     InlineKeyboardAttachment:
       type: object
@@ -1754,10 +1911,12 @@ components:
           type: string
           enum:
             - inline_keyboard
+          description: 'Тип вложения: `inline_keyboard`'
         payload:
           allOf:
             - $ref: '#/components/schemas/Keyboard'
           description: Полезная нагрузка клавиатуры
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Кнопки в сообщении
@@ -1771,10 +1930,12 @@ components:
           type: string
           enum:
             - inline_keyboard
+          description: 'Тип вложения: `inline_keyboard`'
         payload:
           allOf:
             - $ref: '#/components/schemas/InlineKeyboardAttachmentRequestPayload'
           description: Полезная нагрузка запроса на прикрепление клавиатуры
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление клавиатуры к сообщению
@@ -1786,19 +1947,12 @@ components:
         buttons:
           type: array
           items:
-            type: array
-            items:
-              $ref: '#/components/schemas/Button'
+            $ref: '#/components/schemas/ButtonRowItem'
           minItems: 1
+          maxItems: 100
           description: Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
+      additionalProperties: false
       description: Полезная нагрузка запроса на прикрепление клавиатуры
-    Intent:
-      type: string
-      enum:
-        - positive
-        - negative
-        - default
-      description: Намерение кнопки
     Keyboard:
       type: object
       required:
@@ -1807,10 +1961,10 @@ components:
         buttons:
           type: array
           items:
-            type: array
-            items:
-              $ref: '#/components/schemas/Button'
+            $ref: '#/components/schemas/ButtonRowItem'
+          maxItems: 100
           description: Массив рядов с кнопками
+      additionalProperties: false
       description: Клавиатура — это двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
     LinkButton:
       type: object
@@ -1822,10 +1976,19 @@ components:
           type: string
           enum:
             - link
+          description: 'Тип кнопки: `link`'
         url:
           type: string
           maxLength: 2048
-          description: Ссылка
+          pattern: ^[\w\W]{0,2048}$
+          description: Ссылка. 2048 — значение из официальной схемы MAX
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: После нажатия на такую кнопку пользователь переходит по ссылке, которую она содержит
@@ -1839,11 +2002,26 @@ components:
           type: string
           enum:
             - link
+          description: 'Тип элемента разметки: `link`'
         url:
           type: string
           minLength: 1
           maxLength: 2048
-          description: URL ссылки
+          pattern: ^[\w\W]{1,2048}$
+          description: URL ссылки. 2048 — значение из официальной схемы MAX
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет ссылку в тексте
@@ -1864,11 +2042,14 @@ components:
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Чат, в котором сообщение было изначально опубликовано. Только для пересланных сообщений. Как получить ID — в разделе «Получение chat_id»
         message:
           allOf:
             - $ref: '#/components/schemas/MessageBody'
           description: Содержимое связанного (пересланного или ответного) сообщения
+      additionalProperties: false
       description: Пересланное или ответное сообщение
     LocationAttachment:
       type: object
@@ -1881,14 +2062,20 @@ components:
           type: string
           enum:
             - location
+          description: 'Тип вложения: `location`'
         latitude:
           type: number
           format: double
-          description: Широта
+          minimum: -90
+          maximum: 90
+          description: Широта. Диапазон от -90 до 90 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы
         longitude:
           type: number
           format: double
-          description: Долгота
+          minimum: -180
+          maximum: 180
+          description: Долгота. Диапазон от -180 до 180 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение географического положения
@@ -1903,35 +2090,47 @@ components:
           type: string
           enum:
             - location
+          description: 'Тип вложения: `location`'
         latitude:
           type: number
           format: double
-          description: Широта
+          minimum: -90
+          maximum: 90
+          description: Широта. Диапазон от -90 до 90 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы
         longitude:
           type: number
           format: double
-          description: Долгота
+          minimum: -180
+          maximum: 180
+          description: Долгота. Диапазон от -180 до 180 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление вложения географического положения
     MarkupElement:
       type: object
       required:
+        - type
         - from
         - length
-        - type
       properties:
+        type:
+          type: string
+          maxLength: 64
+          pattern: ^[a-z_]+$
+          description: Тип элемента разметки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
         from:
           type: integer
           format: int32
+          minimum: 0
+          maximum: 2147483647
           description: Индекс начала элемента разметки в тексте. Нумерация с нуля
         length:
           type: integer
           format: int32
+          minimum: 0
+          maximum: 2147483647
           description: Длина элемента разметки
-        type:
-          type: string
-          description: Discriminator property for MarkupElement.
       discriminator:
         propertyName: type
         mapping:
@@ -1953,7 +2152,24 @@ components:
       properties:
         token:
           type: string
-          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+        url:
+          type: string
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: 'URL медиа-вложения. Этот URL будет получен в объекте Update после
+
+            отправки сообщения в чат.
+
+
+            Прямую ссылку на видео также можно получить с помощью метода
+
+            `GET /videos/{-videoToken-}`. 2048 — официальный лимит URL в оригинальной
+
+            схеме (LinkButton.url, LinkMarkup.url)'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentPayload'
       description: Полезная нагрузка медиа-вложения (видео/аудио)
@@ -1975,6 +2191,8 @@ components:
         timestamp:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Время создания сообщения в формате Unix-time
         link:
           type: object
@@ -1995,7 +2213,10 @@ components:
         url:
           type: string
           nullable: true
-          description: Публичная ссылка на пост в канале. Отсутствует для диалогов и групповых чатов
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: Публичная ссылка на пост в канале. Отсутствует для диалогов и групповых чатов. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+      additionalProperties: false
       description: Сообщение в чате
     MessageBody:
       type: object
@@ -2005,28 +2226,52 @@ components:
         - text
       properties:
         mid:
-          type: string
+          allOf:
+            - $ref: '#/components/schemas/MessageId'
           description: Уникальный ID сообщения
         seq:
           type: integer
+          maximum: 9223372036854775807
           format: int64
-          description: ID последовательности сообщения в чате
+          minimum: 0
+          description: |-
+            ID последовательности сообщения в чате.
+
+            Единственное int64-поле схемы БЕЗ `@maxValue`: его верхняя граница — предел
+            самого типа (2^63-1), а не «JSON-safe» 2^53-1, как у идентификаторов и
+            времени. `seq` не счётчик, а упакованное значение — старшие биты хранят
+            время создания в миллисекундах, младшие счётчик внутри миллисекунды, — и
+            прод отдаёт величины порядка 1.17e17, на порядок выше 2^53-1 (наблюдение
+            зафиксировано в maxmoc/internal/ids/ids.go: mid
+            `mid.000000001a5b94f2019fdaa593db1d43` разбирается в chat_id 442209522 и
+            seq 117052520019991875). Прежняя граница 2^53-1 отвергала любой честный
+            ответ платформы.
+
+            Записать 2^63-1 через `@maxValue` нельзя: компилятор TypeSpec держит
+            числовые литералы в JS-числах, и всё выше 2^53-1 теряет точность — эмиттер
+            молча выбрасывает такое ограничение. Явный `maximum` дописывает
+            scripts/apply_int_bounds.py.
         text:
           type: string
           nullable: true
-          description: Новый текст сообщения
+          maxLength: 4000
+          pattern: ^[\w\W]{0,4000}$
+          description: Новый текст сообщения. 4000 — официальный лимит текста сообщения (NewMessageBody.text)
         attachments:
           type: array
           items:
             $ref: '#/components/schemas/Attachment'
           nullable: true
+          maxItems: 100
           description: Вложения сообщения. Могут быть одним из типов `Attachment`. Смотрите описание схемы
         markup:
           type: array
           items:
             $ref: '#/components/schemas/MarkupElement'
           nullable: true
+          maxItems: 500
           description: Разметка текста сообщения. Для подробной информации загляните в раздел [Форматирование](/docs-api#Форматирование%20текста%20в%20сообщениях)
+      additionalProperties: false
       description: Схема, представляющая тело сообщения
     MessageButton:
       type: object
@@ -2037,6 +2282,14 @@ components:
           type: string
           enum:
             - message
+          description: 'Тип кнопки: `message`'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: Кнопка, при нажатии на которую от лица пользователя в чат отправляется указанный текст
@@ -2051,6 +2304,7 @@ components:
           type: string
           enum:
             - message_callback
+          description: 'Тип события: `message_callback`'
         callback:
           allOf:
             - $ref: '#/components/schemas/Callback'
@@ -2066,7 +2320,16 @@ components:
         user_locale:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только пользователь нажмёт кнопку
@@ -2081,17 +2344,28 @@ components:
           type: string
           enum:
             - message_chat_created
+          description: 'Тип события: `message_chat_created`'
         chat:
           allOf:
             - $ref: '#/components/schemas/Chat'
           description: Созданный чат
         message_id:
-          type: string
+          allOf:
+            - $ref: '#/components/schemas/MessageId'
           description: ID сообщения, где была нажата кнопка
         start_payload:
           type: string
           nullable: true
-          description: Полезная нагрузка от кнопки чата
+          maxLength: 512
+          pattern: ^[\w\W]{0,512}$
+          description: Полезная нагрузка от кнопки чата. 512 — официальный лимит источника значения (ChatButton.start_payload)
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: |-
@@ -2112,6 +2386,7 @@ components:
           type: string
           enum:
             - message_created
+          description: 'Тип события: `message_created`'
         message:
           allOf:
             - $ref: '#/components/schemas/Message'
@@ -2119,7 +2394,16 @@ components:
         user_locale:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Текущий язык пользователя в формате IETF BCP 47. Доступно только в диалогах
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только сообщение будет создано
@@ -2133,13 +2417,33 @@ components:
           type: string
           enum:
             - message_edited
+          description: 'Тип события: `message_edited`'
         message:
           allOf:
             - $ref: '#/components/schemas/Message'
           description: Отредактированное сообщение
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только пользователь отредактирует сообщение
+    MessageId:
+      type: string
+      minLength: 1
+      maxLength: 255
+      pattern: ^[a-zA-Z0-9._\-]+$
+      description: |-
+        ID сообщения (`mid`). Реальные ID имеют вид `mid.000000001a5b94f2…` —
+        содержат точку, поэтому класс символов расширен относительно паттерна
+        оригинала `[a-zA-Z0-9_\-]+` у `GET /messages/{messageId}`: тот не заякорен
+        и потому пропускает вообще любую строку с одним допустимым символом
+        (см. DEVIATIONS в scripts/compare.py). Ограничения добавлены по
+        требованиям КБ (pattern + maxLength для строк).
     MessageLinkType:
       type: string
       enum:
@@ -2155,7 +2459,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Message'
+          maxItems: 100
           description: Массив сообщений
+      additionalProperties: false
       description: Пагинированный список сообщений
     MessageRemovedUpdate:
       type: object
@@ -2169,17 +2475,30 @@ components:
           type: string
           enum:
             - message_removed
+          description: 'Тип события: `message_removed`'
         message_id:
-          type: string
+          allOf:
+            - $ref: '#/components/schemas/MessageId'
           description: ID удалённого сообщения
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где сообщение было удалено. Как получить ID — в разделе «Получение chat_id»
         user_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Пользователь, удаливший сообщение
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: Вы получите это событие, как только сообщение будет удалено
@@ -2190,27 +2509,11 @@ components:
       properties:
         views:
           type: integer
+          minimum: 0
+          maximum: 2147483647
           description: Количество пользователей, которые увидели пост в канале. Просмотр засчитывается, когда пост попадает в область видимости экрана
+      additionalProperties: false
       description: Статистика сообщения. Возвращается только для постов в каналах
-    ModifyMembersResult:
-      type: object
-      properties:
-        failed_user_ids:
-          type: array
-          items:
-            type: integer
-            format: int64
-          nullable: true
-          description: ID пользователей, которых не удалось добавить в групповой чат
-        failed_user_details:
-          type: array
-          items:
-            $ref: '#/components/schemas/FailedUserDetails'
-          nullable: true
-          description: Подробное объяснение, почему пользователь не был добавлен в групповой чат
-      allOf:
-        - $ref: '#/components/schemas/SimpleQueryResult'
-      description: Результат запроса на изменение списка участников
     MonospacedMarkup:
       type: object
       required:
@@ -2220,6 +2523,20 @@ components:
           type: string
           enum:
             - monospaced
+          description: 'Тип элемента разметки: `monospaced`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет `моноширинный` или блок ```код``` в тексте
@@ -2234,12 +2551,14 @@ components:
           type: string
           nullable: true
           maxLength: 4000
-          description: Новый текст сообщения
+          pattern: ^[\w\W]{0,4000}$
+          description: Новый текст сообщения. 4000 — значение из официальной схемы MAX
         attachments:
           type: array
           items:
             $ref: '#/components/schemas/AttachmentRequest'
           nullable: true
+          maxItems: 100
           description: Вложения сообщения. Если поле равно `null`, изменений не произойдет. Если пусто, все вложения будут удалены
         link:
           type: object
@@ -2256,6 +2575,7 @@ components:
             - $ref: '#/components/schemas/TextFormat'
           nullable: true
           description: Если установлен, текст сообщения будет форматирован данным способом. Для подробной информации загляните в раздел [Форматирование](/docs-api#Форматирование%20текста%20в%20сообщениях)
+      additionalProperties: false
       description: Новое сообщение, отправляемое ботом
     NewMessageLink:
       type: object
@@ -2268,8 +2588,10 @@ components:
             - $ref: '#/components/schemas/MessageLinkType'
           description: Тип ссылки сообщения
         mid:
-          type: string
+          allOf:
+            - $ref: '#/components/schemas/MessageId'
           description: ID исходного сообщения
+      additionalProperties: false
       description: Ссылка на сообщение, которое нужно переслать или на которое нужно ответить
     OpenAppButton:
       type: object
@@ -2280,16 +2602,30 @@ components:
           type: string
           enum:
             - open_app
+          description: 'Тип кнопки: `open_app`'
         web_app:
           type: string
-          description: Публичное имя (username) бота или ссылка на него, чьё мини-приложение надо запустить
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: Публичное имя (username) бота или ссылка на него, чьё мини-приложение надо запустить. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         contact_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Идентификатор бота, чьё мини-приложение надо запустить
         payload:
           type: string
-          description: Параметр запуска, который будет передан в initData мини-приложения
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Параметр запуска, который будет передан в initData мини-приложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: Кнопка для запуска мини-приложения
@@ -2303,10 +2639,12 @@ components:
           type: string
           enum:
             - image
+          description: 'Тип вложения: `image`'
         payload:
           allOf:
             - $ref: '#/components/schemas/PhotoAttachmentPayload'
           description: Полезная нагрузка фото-вложения
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение изображения
@@ -2320,13 +2658,20 @@ components:
         photo_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Уникальный ID этого изображения
         token:
           type: string
-          description: Токен вложения
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
         url:
           type: string
-          description: 'URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте'
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: 'URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)'
+      additionalProperties: false
       description: Полезная нагрузка фото-вложения
     PhotoAttachmentRequest:
       type: object
@@ -2338,10 +2683,12 @@ components:
           type: string
           enum:
             - image
+          description: 'Тип вложения: `image`'
         payload:
           allOf:
             - $ref: '#/components/schemas/PhotoAttachmentRequestPayload'
           description: Полезная нагрузка запроса на прикрепление изображения
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление изображения к сообщению
@@ -2352,17 +2699,22 @@ components:
           type: string
           nullable: true
           minLength: 1
-          description: Любой внешний URL изображения, которое вы хотите прикрепить
+          maxLength: 2048
+          pattern: ^[\w\W]{1,2048}$
+          description: Любой внешний URL изображения, которое вы хотите прикрепить. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         token:
           type: string
           nullable: true
-          description: Токен существующего вложения
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен существующего вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
         photos:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/PhotoToken'
           nullable: true
           description: Токены, полученные после загрузки изображений
+      additionalProperties: false
       description: Запрос на прикрепление изображения (все поля являются взаимоисключающими)
     PhotoToken:
       type: object
@@ -2371,33 +2723,11 @@ components:
       properties:
         token:
           type: string
-          description: Закодированная информация загруженного изображения
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Закодированная информация загруженного изображения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+      additionalProperties: false
       description: Токен, полученный после загрузки изображения
-    PhotoTokens:
-      type: object
-      required:
-        - photos
-      properties:
-        photos:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/PhotoToken'
-          description: Токены загруженных изображений
-      description: Это информация, которую вы получите, как только изображение будет загружено
-    PinMessageBody:
-      type: object
-      required:
-        - message_id
-      properties:
-        message_id:
-          type: string
-          description: ID сообщения, которое нужно закрепить. Соответствует полю `Message.body.mid`
-        notify:
-          type: boolean
-          nullable: true
-          description: Если `true`, участники получат уведомление с системным сообщением о закреплении
-          default: true
-      description: Тело запроса на закрепление сообщения в чате
     QuoteMarkup:
       type: object
       required:
@@ -2407,6 +2737,20 @@ components:
           type: string
           enum:
             - quote
+          description: 'Тип элемента разметки: `quote`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет цитату
@@ -2421,6 +2765,8 @@ components:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата. Как получить ID — в разделе «Получение chat_id»
         chat_type:
           allOf:
@@ -2430,27 +2776,34 @@ components:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: ID пользователя, если сообщение было отправлено пользователю
+      additionalProperties: false
       description: Новый получатель сообщения. Может быть пользователем или чатом
     ReplyButton:
       type: object
       required:
-        - text
         - type
+        - text
       properties:
+        type:
+          type: string
+          maxLength: 64
+          pattern: ^[a-z_]+$
+          description: Тип кнопки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
         text:
           type: string
           minLength: 1
           maxLength: 128
-          description: Видимый текст кнопки
+          pattern: ^[\w\W]{1,128}$
+          description: Видимый текст кнопки. 128 — значение из официальной схемы MAX
         payload:
           type: string
           nullable: true
           maxLength: 1024
-          description: Токен кнопки
-        type:
-          type: string
-          description: Discriminator property for ReplyButton.
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен кнопки. 1024 — значение из официальной схемы MAX
       discriminator:
         propertyName: type
         mapping:
@@ -2458,6 +2811,12 @@ components:
           user_geo_location: '#/components/schemas/SendGeoLocationButton'
           user_contact: '#/components/schemas/SendContactButton'
       description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
+    ReplyButtonRowItem:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReplyButton'
+      maxItems: 100
+      description: Ряд кнопок reply-клавиатуры
     ReplyKeyboardAttachment:
       type: object
       required:
@@ -2468,13 +2827,14 @@ components:
           type: string
           enum:
             - reply_keyboard
+          description: 'Тип вложения: `reply_keyboard`'
         buttons:
           type: array
           items:
-            type: array
-            items:
-              $ref: '#/components/schemas/ReplyButton'
+            $ref: '#/components/schemas/ReplyButtonRowItem'
+          maxItems: 100
           description: Массив рядов с кнопками
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: |-
@@ -2493,6 +2853,7 @@ components:
           type: string
           enum:
             - reply_keyboard
+          description: 'Тип вложения: `reply_keyboard`'
         direct:
           type: boolean
           description: Применимо только для чатов. Если `true`, клавиатура будет показана только тому, кто упомянул или ответил боту
@@ -2501,15 +2862,17 @@ components:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: Если задано, reply-клавиатура будет показана только этому участнику чата
         buttons:
           type: array
           items:
-            type: array
-            items:
-              $ref: '#/components/schemas/ReplyButton'
+            $ref: '#/components/schemas/ReplyButtonRowItem'
           minItems: 1
+          maxItems: 100
           description: Двумерный массив кнопок. Подробнее о типах кнопок и клавиатуре в ботах — в разделе «Клавиатура для чат-бота»
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: |-
@@ -2527,6 +2890,14 @@ components:
           type: string
           enum:
             - request_contact
+          description: 'Тип кнопки: `request_contact`'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
@@ -2539,13 +2910,30 @@ components:
           type: string
           enum:
             - request_geo_location
+          description: 'Тип кнопки: `request_geo_location`'
         quick:
           type: boolean
           description: Если `true`, отправляет местоположение без запроса подтверждения пользователя
           default: false
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: 'Видимый текст кнопки. Чтобы он отображался полностью, рекомендуем не превышать заданное количество символов в зависимости от размещения текста: `20` символов — при 1 кнопке в ряду, `10` — при 2, `5` — при 3, `3` — при 4. 128 — значение из официальной схемы MAX'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Button'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
+    SafeInt64:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9007199254740991
+      description: |-
+        int64 в безопасном для JSON/JS диапазоне 0..2^53-1 (требование КБ: явные
+        minimum/maximum у чисел). Используется для элементов массивов и значений
+        Record, где инлайн-декораторы недоступны.
     SendContactButton:
       type: object
       required:
@@ -2555,6 +2943,20 @@ components:
           type: string
           enum:
             - user_contact
+          description: 'Тип кнопки: `user_contact`'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: Видимый текст кнопки. 128 — значение из официальной схемы MAX
+        payload:
+          type: string
+          nullable: true
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен кнопки. 1024 — значение из официальной схемы MAX
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/ReplyButton'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего контакта пользователя
@@ -2567,10 +2969,24 @@ components:
           type: string
           enum:
             - user_geo_location
+          description: 'Тип кнопки: `user_geo_location`'
         quick:
           type: boolean
           description: Если `true`, отправляет местоположение без запроса подтверждения пользователя
           default: false
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: Видимый текст кнопки. 128 — значение из официальной схемы MAX
+        payload:
+          type: string
+          nullable: true
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен кнопки. 1024 — значение из официальной схемы MAX
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/ReplyButton'
       description: После нажатия на такую кнопку клиент отправляет новое сообщение с вложением текущего географического положения пользователя
@@ -2583,6 +2999,20 @@ components:
           type: string
           enum:
             - message
+          description: 'Тип кнопки: `message`'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[\w\W]{1,128}$
+          description: Видимый текст кнопки. 128 — значение из официальной схемы MAX
+        payload:
+          type: string
+          nullable: true
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен кнопки. 1024 — значение из официальной схемы MAX
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/ReplyButton'
       description: После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой
@@ -2595,22 +3025,8 @@ components:
           allOf:
             - $ref: '#/components/schemas/Message'
           description: Отправленное сообщение
+      additionalProperties: false
       description: Результат отправки сообщения
-    SenderAction:
-      type: string
-      enum:
-        - typing_on
-        - sending_photo
-        - sending_video
-        - sending_audio
-        - sending_file
-      description: |-
-        Действие, отправляемое участникам чата. Возможные значения:
-        - `"typing_on"` — Бот набирает сообщение
-        - `"sending_photo"` — Бот отправляет фото
-        - `"sending_video"` — Бот отправляет видео
-        - `"sending_audio"` — Бот отправляет аудиофайл
-        - `"sending_file"` — Бот отправляет файл
     ShareAttachment:
       type: object
       required:
@@ -2621,6 +3037,7 @@ components:
           type: string
           enum:
             - share
+          description: 'Тип вложения: `share`'
         payload:
           allOf:
             - $ref: '#/components/schemas/ShareAttachmentPayload'
@@ -2628,15 +3045,22 @@ components:
         title:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Заголовок предпросмотра ссылки
         description:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Описание предпросмотра ссылки
         image_url:
           type: string
           nullable: true
-          description: Изображение предпросмотра ссылки
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: Изображение предпросмотра ссылки. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение с предпросмотром ссылки
@@ -2647,11 +3071,16 @@ components:
           type: string
           nullable: true
           minLength: 1
-          description: URL, прикрепленный к сообщению в качестве предпросмотра медиа
+          maxLength: 2048
+          pattern: ^[\w\W]{1,2048}$
+          description: URL, прикрепленный к сообщению в качестве предпросмотра медиа. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         token:
           type: string
           nullable: true
-          description: Токен вложения
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+      additionalProperties: false
       description: Полезная нагрузка запроса ShareAttachmentRequest
     ShareAttachmentRequest:
       type: object
@@ -2663,10 +3092,12 @@ components:
           type: string
           enum:
             - share
+          description: 'Тип вложения: `share`'
         payload:
           allOf:
             - $ref: '#/components/schemas/ShareAttachmentPayload'
           description: Полезная нагрузка запроса на прикрепление предпросмотра ссылки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление предпросмотра медиафайла по внешнему URL
@@ -2680,6 +3111,8 @@ components:
           description: '`true`, если запрос был успешным, `false` — в противном случае'
         message:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Объяснительное сообщение, если результат не был успешным
       description: Простой ответ на запрос
     StickerAttachment:
@@ -2694,16 +3127,22 @@ components:
           type: string
           enum:
             - sticker
+          description: 'Тип вложения: `sticker`'
         payload:
           allOf:
             - $ref: '#/components/schemas/StickerAttachmentPayload'
           description: Полезная нагрузка вложения-стикера
         width:
           type: integer
+          minimum: 0
+          maximum: 2147483647
           description: Ширина стикера
         height:
           type: integer
+          minimum: 0
+          maximum: 2147483647
           description: Высота стикера
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение стикера
@@ -2714,7 +3153,24 @@ components:
       properties:
         code:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: ID стикера
+        url:
+          type: string
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: 'URL медиа-вложения. Этот URL будет получен в объекте Update после
+
+            отправки сообщения в чат.
+
+
+            Прямую ссылку на видео также можно получить с помощью метода
+
+            `GET /videos/{-videoToken-}`. 2048 — официальный лимит URL в оригинальной
+
+            схеме (LinkButton.url, LinkMarkup.url)'
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentPayload'
       description: Полезная нагрузка вложения-стикера
@@ -2728,10 +3184,12 @@ components:
           type: string
           enum:
             - sticker
+          description: 'Тип вложения: `sticker`'
         payload:
           allOf:
             - $ref: '#/components/schemas/StickerAttachmentRequestPayload'
           description: Полезная нагрузка запроса на прикрепление стикера
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление стикера. Должен быть единственным вложением в сообщении
@@ -2742,7 +3200,10 @@ components:
       properties:
         code:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Код стикера
+      additionalProperties: false
       description: Полезная нагрузка запроса на прикрепление стикера
     StrikethroughMarkup:
       type: object
@@ -2753,6 +3214,20 @@ components:
           type: string
           enum:
             - strikethrough
+          description: 'Тип элемента разметки: `strikethrough`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет ~зачёркнутый~ текст
@@ -2765,6 +3240,20 @@ components:
           type: string
           enum:
             - strong
+          description: 'Тип элемента разметки: `strong`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет **жирный** текст
@@ -2777,24 +3266,28 @@ components:
       properties:
         url:
           type: string
-          description: URL вебхука
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL вебхука. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         time:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Unix-время, когда была создана подписка
         update_types:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/UpdateType'
           nullable: true
+          maxItems: 50
           description: |-
             Типы событий, на которые подписан бот.
 
-            В оригинале элементы массива несут `minLength: 1` (см. DEVIATIONS
-            `Subscription.update_types\[\]` в scripts/compare.py) — перенос этого
-            ограничения через именованный scalar-тип создаёт в нашей схеме лишнюю
-            (не присутствующую в оригинале) схему `components.schemas`, поэтому мы
-            его не переносим и документируем как осознанное отличие.
+            Элементы типизированы scalar-ом `UpdateType` (КБ: pattern + maxLength
+            для строк); его `minLength: 1` заодно совпадает с ограничением
+            элементов в оригинале.
+      additionalProperties: false
       description: Схема для описания подписки на WebHook
     SubscriptionRequestBody:
       type: object
@@ -2803,11 +3296,14 @@ components:
       properties:
         url:
           type: string
-          description: URL HTTPS-endpoint вашего бота. Должен начинаться с `https://`
+          maxLength: 2048
+          pattern: ^https://.+$
+          description: URL HTTPS-endpoint вашего бота. Должен начинаться с `https://`. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         update_types:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/UpdateType'
+          maxItems: 50
           description: Список типов событий, которые хочет получать ваш бот
         secret:
           type: string
@@ -2818,7 +3314,8 @@ components:
             Секрет, который должен быть отправлен в заголовке `X-Max-Bot-Api-Secret`
             в каждом запросе Webhook. Разрешены только символы `A-Z`, `a-z`, `0-9`,
             и дефис. Заголовок рекомендован, чтобы запрос поступал из установленного
-            веб-узла
+            веб-узла. 5..256 — значение из официальной схемы MAX
+      additionalProperties: false
       description: Запрос на настройку подписки WebHook
     TextFormat:
       type: string
@@ -2835,6 +3332,20 @@ components:
           type: string
           enum:
             - underline
+          description: 'Тип элемента разметки: `underline`'
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет подчёркнутый текст
@@ -2846,10 +3357,14 @@ components:
       properties:
         update_type:
           type: string
-          description: Тип события
+          maxLength: 64
+          pattern: ^[a-z_]+$
+          description: Тип события. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
         timestamp:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Unix-время, когда произошло событие
       discriminator:
         propertyName: update_type
@@ -2887,16 +3402,30 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Update'
-          description: Список обновлений о событиях в чатах и каналах, в которые добавлен бот
+          maxItems: 1000
+          description: Список обновлений о событиях в чатах и каналах, в которые добавлен бот. 1000 — зеркало максимума параметра limit у GET /updates
         marker:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: Указатель на следующую страницу данных
+      additionalProperties: false
       description: |-
         Список обновлений о событиях в чатах и каналах, в которые добавлен бот.
         Обратите внимание, чтобы получать события из групповых чатов и каналов,
         бот должен быть администратором
+    UpdateType:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: ^[a-z_]+$
+      description: |-
+        Тип события обновления, например `message_created`, `message_callback`.
+        Ограничения добавлены по требованиям КБ (pattern + maxLength для строк);
+        в оригинале — простая строка. Лимит 64 — по аналогии с официальным
+        лимитом коротких имён (`BotCommand.name`).
     UploadEndpoint:
       type: object
       required:
@@ -2904,10 +3433,15 @@ components:
       properties:
         url:
           type: string
-          description: URL для загрузки медиафайла. Срок жизни ссылки не ограничен
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL для загрузки медиафайла. Срок жизни ссылки не ограничен. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         token:
           type: string
-          description: Токен для отправки медиафайла во вложении к сообщению с помощью POST /messages или PUT /messages
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен для отправки медиафайла во вложении к сообщению с помощью POST /messages или PUT /messages. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+      additionalProperties: false
       description: Точка доступа, куда следует загружать ваши бинарные файлы
     UploadType:
       type: string
@@ -2939,15 +3473,13 @@ components:
       properties:
         token:
           type: string
-          description: Токен — уникальный ID загруженного медиафайла
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен — уникальный ID загруженного медиафайла. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+      additionalProperties: false
       description: Это информация, которую вы получите, как только аудио/видео будет загружено
     User:
       type: object
-      # ПРАВКА МОКА (не апстрим): username убран из required — живой Max у
-      # пользователя без публичного имени поле не присылает, то есть нарушает
-      # эту спеку. Мок повторяет прод, а не контракт; подробности в
-      # internal/wire/wire.go у типа User. При обновлении спеки с апстрима
-      # правку нужно нанести заново.
       required:
         - user_id
         - first_name
@@ -2958,17 +3490,25 @@ components:
         user_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Идентификатор пользователя или бота
         first_name:
           type: string
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Отображаемое имя пользователя или бота
         last_name:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Отображаемая фамилия пользователя. Для ботов это поле не возвращается
         username:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Никнейм бота или уникальное публичное имя пользователя. В случае с пользователем может быть `null`, если тот недоступен или имя не задано
         is_bot:
           type: boolean
@@ -2976,10 +3516,14 @@ components:
         last_activity_time:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: Время последней активности пользователя или бота в MAX (Unix-время в миллисекундах). Если пользователь отключил в настройках профиля мессенджера MAX возможность видеть, что он в сети онлайн, поле может не возвращаться
         name:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: Устаревшее поле, скоро будет удалено
       description: |-
         Объект, описывающий один из вариантов наследования:
@@ -3000,9 +3544,12 @@ components:
           type: string
           enum:
             - user_added
+          description: 'Тип события: `user_added`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -3012,38 +3559,26 @@ components:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: |-
             Пользователь, который добавил нового пользователя в чат. Может быть
             `null`, если пользователь присоединился к чату по ссылке
         is_channel:
           type: boolean
           description: Указывает, что пользователь добавлен в канал, а не в чат
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: |-
         Вы получите это событие, как только пользователь будет добавлен в чат,
         где бот является администратором
-    UserIdsList:
-      type: object
-      required:
-        - user_ids
-      properties:
-        user_ids:
-          type: array
-          items:
-            type: integer
-            format: int64
-          maxItems: 100
-          description: Массив ID пользователей, которых вы хотите добавить в групповой чат. В одном запросе можно передать максимум 100 идентификаторов
-      description: |-
-        Список ID пользователей.
-
-        ОТЛИЧИЕ ОТ ОРИГИНАЛА (осознанное, см. DEVIATIONS в scripts/compare.py):
-        в оригинальной схеме `user_ids` описан как параметро-подобная структура
-        (name/required/schema/style) с maxItems, заданным строкой ("100") на
-        уровне items, а не массива — явный артефакт копипасты из описания
-        параметра запроса. Мы транскрибируем содержательный смысл: обычное
-        свойство-массив с ограничением на количество элементов.
     UserMentionMarkup:
       type: object
       required:
@@ -3053,15 +3588,33 @@ components:
           type: string
           enum:
             - user_mention
+          description: 'Тип элемента разметки: `user_mention`'
         user_link:
           type: string
           nullable: true
+          maxLength: 255
+          pattern: ^[\w\W]{0,255}$
           description: '`@username` упомянутого пользователя'
         user_id:
           type: integer
           format: int64
           nullable: true
+          minimum: 0
+          maximum: 9007199254740991
           description: ID упомянутого пользователя без имени
+        from:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Индекс начала элемента разметки в тексте. Нумерация с нуля
+        length:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Длина элемента разметки
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/MarkupElement'
       description: Представляет упоминание пользователя в тексте. Упоминание может быть как по имени пользователя, так и по ID, если у пользователя нет имени
@@ -3077,9 +3630,12 @@ components:
           type: string
           enum:
             - user_removed
+          description: 'Тип события: `user_removed`'
         chat_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
           allOf:
@@ -3088,12 +3644,21 @@ components:
         admin_id:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9007199254740991
           description: |-
             Администратор, который удалил пользователя из чата. Может быть `null`,
             если пользователь покинул чат сам
         is_channel:
           type: boolean
           description: Указывает, что пользователь удалён из канала, а не из чата
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Unix-время, когда произошло событие
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Update'
       description: |-
@@ -3106,13 +3671,18 @@ components:
           type: string
           nullable: true
           maxLength: 16000
-          description: Описание пользователя или бота. В случае с пользователем может принимать значение `null`, если описание не заполнено
+          pattern: ^[\w\W]{0,16000}$
+          description: Описание пользователя или бота. В случае с пользователем может принимать значение `null`, если описание не заполнено. 16000 — значение из официальной схемы MAX
         avatar_url:
           type: string
-          description: URL аватара пользователя или бота в уменьшенном размере
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL аватара пользователя или бота в уменьшенном размере. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
         full_avatar_url:
           type: string
-          description: URL аватара пользователя или бота в полном размере
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL аватара пользователя или бота в полном размере. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
       allOf:
         - $ref: '#/components/schemas/User'
       description: Объект с общей информацией о пользователе или боте. Является наследником схемы User — дополнительно к ней содержит URL аватара и описание
@@ -3126,6 +3696,7 @@ components:
           type: string
           enum:
             - video
+          description: 'Тип вложения: `video`'
         payload:
           allOf:
             - $ref: '#/components/schemas/MediaAttachmentPayload'
@@ -3139,15 +3710,22 @@ components:
         width:
           type: integer
           nullable: true
+          minimum: 0
+          maximum: 2147483647
           description: Ширина видео
         height:
           type: integer
           nullable: true
+          minimum: 0
+          maximum: 2147483647
           description: Высота видео
         duration:
           type: integer
           nullable: true
+          minimum: 0
+          maximum: 2147483647
           description: Длина видео в секундах
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/Attachment'
       description: Вложение видео
@@ -3161,7 +3739,9 @@ components:
       properties:
         token:
           type: string
-          description: Токен видео-вложения
+          maxLength: 1024
+          pattern: ^[\w\W]{0,1024}$
+          description: Токен видео-вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
         urls:
           type: object
           allOf:
@@ -3176,13 +3756,20 @@ components:
           description: Миниатюра видео
         width:
           type: integer
+          minimum: 0
+          maximum: 2147483647
           description: Ширина видео
         height:
           type: integer
+          minimum: 0
+          maximum: 2147483647
           description: Высота видео
         duration:
           type: integer
+          minimum: 0
+          maximum: 2147483647
           description: Длина видео в секундах
+      additionalProperties: false
       description: Подробная информация о видео-вложении
     VideoAttachmentRequest:
       type: object
@@ -3194,10 +3781,12 @@ components:
           type: string
           enum:
             - video
+          description: 'Тип вложения: `video`'
         payload:
           allOf:
             - $ref: '#/components/schemas/UploadedInfo'
           description: Полезная нагрузка запроса на прикрепление видео
+      additionalProperties: false
       allOf:
         - $ref: '#/components/schemas/AttachmentRequest'
       description: Запрос на прикрепление видео к сообщению
@@ -3208,7 +3797,10 @@ components:
       properties:
         url:
           type: string
-          description: URL изображения
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
+          description: URL изображения. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+      additionalProperties: false
       description: Миниатюра видео
     VideoUrls:
       type: object
@@ -3216,32 +3808,51 @@ components:
         mp4_1080:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL видео в разрешении 1080p, если доступно
         mp4_720:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL видео в разрешении 720p, если доступно
         mp4_480:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL видео в разрешении 480p, если доступно
         mp4_360:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL видео в разрешении 360p, если доступно
         mp4_240:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL видео в разрешении 240p, если доступно
         mp4_144:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL видео в разрешении 144p, если доступно
         hls:
           type: string
           nullable: true
+          maxLength: 2048
+          pattern: ^[\w\W]{0,2048}$
           description: URL трансляции, если доступна
-      description: URL-ы видео в разных разрешениях
+      additionalProperties: false
+      description: |-
+        URL-ы видео в разных разрешениях.
+
+        Лимит 2048 у всех полей — официальный лимит URL в оригинальной схеме
+        (LinkButton.url, LinkMarkup.url).
   securitySchemes:
     ApiKeyAuth:
       type: apiKey

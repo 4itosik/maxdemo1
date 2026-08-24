@@ -1,6 +1,6 @@
 // Package api содержит OpenAPI-артефакты репозитория maxapi — единственный
 // источник правды о контракте Max Bot API. Файлы обновляются через
-// `make sync-specs`; версия контракта — 0.0.32.
+// `make sync-specs`; версия контракта — 0.0.33.
 package api
 
 import "embed"

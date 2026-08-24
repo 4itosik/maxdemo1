@@ -79,7 +79,6 @@ func loadDoc(name string) (*openapi3.T, error) {
 		return nil, fmt.Errorf("разбор %s: %w", name, err)
 	}
 	normalizeAuthSchemes(doc)
-	normalizeChatType(doc)
 	// Примеры в спеке снабжены ремарками и не обязаны проходить валидацию схем.
 	if err := doc.Validate(loader.Context,
 		openapi3.DisableExamplesValidation(),
@@ -104,33 +103,6 @@ func normalizeAuthSchemes(doc *openapi3.T) {
 		if ref != nil && ref.Value != nil && ref.Value.Type == "http" {
 			ref.Value.Scheme = strings.ToLower(ref.Value.Scheme)
 		}
-	}
-}
-
-// normalizeChatType дополняет enum ChatType значением "dialog".
-//
-// В контракте ChatType объявлен как enum ["chat"], хотя его собственное
-// описание — «Тип чата: диалог, чат». Тот же дефект в официальной схеме Max
-// (reference/max-openapi-official.json в maxapi), откуда он и переписан:
-// значение "dialog" забыли, хотя реальная платформа возвращает именно его в
-// Recipient.chat_type для диалогов «клиент ↔ бот». Мок эмулирует только
-// диалоги, поэтому без этой правки он не смог бы отдать ни одного корректного
-// сообщения. Правка расширяет enum, а не подменяет его: "chat" остаётся
-// допустимым.
-func normalizeChatType(doc *openapi3.T) {
-	if doc.Components == nil {
-		return
-	}
-	for name, ref := range doc.Components.Schemas {
-		if !strings.HasSuffix(name, "ChatType") || ref == nil || ref.Value == nil {
-			continue
-		}
-		for _, v := range ref.Value.Enum {
-			if s, ok := v.(string); ok && s == "dialog" {
-				return
-			}
-		}
-		ref.Value.Enum = append(ref.Value.Enum, "dialog")
 	}
 }
 

@@ -277,20 +277,12 @@ const (
 	ButtonRequestGeoLocation = "request_geo_location"
 )
 
-// Намерение кнопки влияет на её цвет в клиенте Max.
-const (
-	IntentPositive = "positive"
-	IntentNegative = "negative"
-	IntentDefault  = "default"
-)
-
 // Button — кнопка клавиатуры. Набор полей зависит от Type.
 type Button struct {
 	Type    string `json:"type"`
 	Text    string `json:"text"`
 	Payload string `json:"payload,omitempty"`
 	URL     string `json:"url,omitempty"`
-	Intent  string `json:"intent,omitempty"`
 }
 
 // BotInfo — ответ GET /me.

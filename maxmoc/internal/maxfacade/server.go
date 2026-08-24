@@ -485,13 +485,10 @@ func (s *Server) subscribe(w http.ResponseWriter, route *routers.Route, bot *sto
 		s.fail(w, route, err)
 		return
 	}
-	result := wire.SimpleQueryResult{Success: true}
-	// Контракт требует https, но стенды закрытого контура живут на http.
-	// Подписку принимаем и честно помечаем это в ответе.
-	if strings.HasPrefix(strings.ToLower(req.URL), "http://") {
-		result.Message = "подписка на http:// принята (контракт Max требует https)"
-	}
-	writeJSON(w, http.StatusOK, result)
+	// Пометки про http:// здесь больше нет: контракт объявляет
+	// SubscriptionRequestBody.url как `^https://.+$`, и запрос с http-адресом
+	// отсеивается валидацией тела до входа в хендлер. Ветка была недостижима.
+	writeJSON(w, http.StatusOK, wire.SimpleQueryResult{Success: true})
 }
 
 func (s *Server) unsubscribe(w http.ResponseWriter, route *routers.Route, bot *store.Bot, q map[string][]string) {

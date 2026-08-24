@@ -482,7 +482,7 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	f := newFixture(t)
 
 	resp, body := f.do(t, "POST", "/subscriptions",
-		`{"url":"http://stand.local/hook","update_types":["message_created"],"secret":"abcdef"}`)
+		`{"url":"https://stand.local/hook","update_types":["message_created"],"secret":"abcdef"}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("подписка: %d %s", resp.StatusCode, body)
 	}
@@ -490,9 +490,6 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	_ = json.Unmarshal(body, &res)
 	if !res.Success {
 		t.Errorf("подписка не удалась: %s", body)
-	}
-	if res.Message == "" {
-		t.Error("подписка на http:// должна сопровождаться пометкой в ответе")
 	}
 
 	resp, body = f.do(t, "GET", "/subscriptions", "")
@@ -503,14 +500,14 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(body, &subs); err != nil {
 		t.Fatal(err)
 	}
-	if len(subs.Subscriptions) != 1 || subs.Subscriptions[0].URL != "http://stand.local/hook" {
+	if len(subs.Subscriptions) != 1 || subs.Subscriptions[0].URL != "https://stand.local/hook" {
 		t.Fatalf("подписки: %+v", subs.Subscriptions)
 	}
 	if subs.Subscriptions[0].Time == 0 {
 		t.Error("время создания подписки не заполнено")
 	}
 
-	resp, _ = f.do(t, "DELETE", "/subscriptions?url=http://stand.local/hook", "")
+	resp, _ = f.do(t, "DELETE", "/subscriptions?url=https://stand.local/hook", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("отписка: %d", resp.StatusCode)
 	}

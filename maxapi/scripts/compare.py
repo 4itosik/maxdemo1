@@ -26,14 +26,14 @@ OURS = ROOT / "tsp-output" / "@typespec" / "openapi3" / "openapi.MaxBotApi.yaml"
 DEVIATIONS = [
     r"message_chat_created",  # отсутствует в mapping оригинала (недосмотр)
     r"mapping\[chat\]",  # ChatButton есть в схемах, но отсутствует в Button.discriminator.mapping оригинала (недосмотр)
-    # Оригинал не объявляет свойство `type` в properties/required у ReplyButton
-    # (и его наследников по <mapping>-цепочке), хотя дискриминатор задан — в
-    # отличие от Button. У нас `type` эмиттится легитимно. Ограничено двумя
-    # конкретными формами диффа внутри поддерева schemas.ReplyButton*, чтобы
-    # любые другие расхождения (например неверный maxLength у SendContactButton)
-    # по-прежнему всплывали как DIFF.
+    # Оригинал не объявляет свойство `type` в properties у ReplyButton (и его
+    # наследников по <mapping>-цепочке), хотя дискриминатор задан — в отличие
+    # от Button. У нас `type` эмиттится легитимно. В 0.0.33 оригинал начал
+    # требовать `type` в required, по-прежнему не объявляя его в properties:
+    # половина отклонения закрылась, половина осталась. Ограничено поддеревом
+    # schemas.ReplyButton*, чтобы любые другие расхождения (например неверный
+    # maxLength у SendContactButton) по-прежнему всплывали как DIFF.
     r"^schemas\.ReplyButton(<[^>]*>)*\.type: лишнее свойство у нас$",
-    r"^schemas\.ReplyButton(<[^>]*>)*: required: официально \[[^\]]*\], у нас \[[^\]]*'type'[^\]]*\]$",
     # DataAttachment есть в схемах и расширяет Attachment, но отсутствует в
     # Attachment.discriminator.mapping оригинала (недосмотр, тот же приём,
     # что и для mapping[chat])
@@ -42,6 +42,26 @@ DEVIATIONS = [
     # расширяют Attachment/AttachmentRequest соответственно, но отсутствуют в
     # соответствующих discriminator.mapping оригинала (недосмотр)
     r"mapping\[reply_keyboard\]",
+    # User.username: оригинал объявляет поле обязательным, у нас оно
+    # необязательное. Подтверждено данными с прода: в регрессе на живом MAX
+    # (см. maxbotdemo/README.md) из 27 снятых объектов User 22 пришли БЕЗ поля
+    # username вовсе — оно было только у самого бота. Требование оригинала
+    # отвергало бы каждое сообщение от человека без username.
+    # ChatMember наследует User, поэтому его required уезжает следом.
+    r"required: официально \['first_name', 'is_bot', 'last_activity_time', 'name', 'user_id', 'username'\], у нас \['first_name', 'is_bot', 'last_activity_time', 'name', 'user_id'\]$",
+    r"required: официально \['first_name', 'is_admin', 'is_bot', 'is_owner', 'join_time', 'last_access_time', 'last_activity_time', 'name', 'permissions', 'user_id', 'username'\], у нас \['first_name', 'is_admin', 'is_bot', 'is_owner', 'join_time', 'last_access_time', 'last_activity_time', 'name', 'permissions', 'user_id'\]$",
+    # ChatType: у нас строка с ограничениями по форме, у оригинала — закрытый
+    # список. Перечисление здесь уже подводило: в 0.0.32 оно состояло из одного
+    # "chat", хотя живая платформа отдаёт "dialog" в каждом сообщении диалога —
+    # регресс на проде отверг из-за этого все 15 снятых событий. В 0.0.33 набор
+    # дополнили до chat/channel/dialog, но способ остался хрупким: следующее
+    # добавленное значение снова сломает валидацию у всех потребителей.
+    # Подробное обоснование — у самого scalar в models/messages.tsp.
+    r"chat_type: enum: официально \['channel', 'chat', 'dialog'\], у нас None$",
+    r"chat_type: type: официально None, у нас 'string'$",
+    r"^schemas\.ChatType: (enum: официально \['channel', 'chat', 'dialog'\], у нас None|type: официально None, у нас 'string')$",
+    r"^schemas\.Chat\.type: (enum: официально \['channel', 'chat', 'dialog'\], у нас None|type: официально None, у нас 'string')$",
+    r"\.chat\.type: (enum: официально \['channel', 'chat', 'dialog'\], у нас None|type: официально None, у нас 'string')$",
     # Оригинал непоследователен: VideoAttachment.thumbnail одновременно
     # объявлен как type: "string" И как allOf-ссылка на объектную схему
     # VideoThumbnail ({url: string}) — явно рудимент более ранней версии
@@ -85,20 +105,6 @@ DEVIATIONS = [
     # unanchored-паттерн по значению безопасен.
     r"required: официально \['attachments', 'link', 'mid', 'seq', 'text'\], у нас \['mid', 'seq', 'text'\]$",
     r"\.attachments: required: официально False, у нас None$",
-    # Subscription.update_types: элементы массива в оригинале несут
-    # minLength: 1. В TypeSpec ограничение на элементе (а не на самом
-    # массиве) строк выражается только через именованный scalar-тип
-    # (`@minLength(1) scalar X extends string`), а такой scalar эмиттится
-    # openapi3-генератором как отдельная схема components.schemas — то есть
-    # появляется схема, которой нет в оригинале. Осознанно жертвуем этим
-    # точечным ограничением (непустая строка типа события), чтобы не
-    # засорять схему артефактом, отсутствующим в first-party спецификации.
-    # Путь заякорен ровно на этом свойстве (независимо от префикса schemas.*
-    # или paths.* — Task 9 достигает того же свойства через
-    # paths./subscriptions.get.responses[200], т.к. GetSubscriptionsResult
-    # раньше раскрывается там, чем в цикле components.schemas), чтобы не
-    # глушить minLength в любом другом месте.
-    r"\.subscriptions\[\]\.update_types\[\]: minLength: официально 1, у нас None$",
     # GET /chats больше не документирован в оригинале (см. подробное
     # обоснование в routes/chats.tsp у операции getChats) — оригинал вообще
     # не содержит ключа "responses" у этой операции. Мы транскрибируем
@@ -142,13 +148,13 @@ DEVIATIONS = [
     #    зависимости (ChatAdmin, ChatAdminPermission, ChatMember,
     #    FailedUserDetails, SenderAction), больше ниоткуда не достижимые;
     # 2) сироты самого оригинала, на которые и он ни разу не ссылается —
-    #    BotPatch, Intent, PhotoTokens.
+    #    BotPatch, PhotoTokens.
     # Первопричина остаётся видимой как отдельные расхождения
     # `paths./chats*: путь отсутствует у нас` — здесь глушим только следствие.
     # Список пришпилен поимённо: пропажа любой ДРУГОЙ схемы всплывёт как DIFF.
     r"^schemas\.(ActionRequestBody|BotPatch|ChatAdmin|ChatAdminPermission"
     r"|ChatAdminsList|ChatList|ChatMember|ChatMembersList|ChatPatch"
-    r"|FailedUserDetails|GetPinnedMessageResult|Intent|ModifyMembersResult"
+    r"|FailedUserDetails|GetPinnedMessageResult|ModifyMembersResult"
     r"|PhotoTokens|PinMessageBody|SenderAction|UserIdsList)"
     r": схема отсутствует у нас$",
     # Числа: явные границы (требование КБ). int64-идентификаторы и
@@ -158,6 +164,13 @@ DEVIATIONS = [
     r"minimum: официально None, у нас 0$",
     r"maximum: официально None, у нас 9007199254740991$",
     r"maximum: официально None, у нас 2147483647$",
+    # MessageBody.seq — исключение из «JSON-safe» правила выше: это не счётчик,
+    # а упакованное «время создания в мс + счётчик внутри мс», и прод отдаёт
+    # ~1.17e17, впятеро с лишним выше 2^53-1 (наблюдение в
+    # maxmoc/internal/ids/ids.go). Граница — предел самого int64; выразить её
+    # через @maxValue нельзя (JS-числа компилятора теряют точность выше
+    # 2^53-1), поэтому её дописывает scripts/apply_int_bounds.py.
+    r"\.seq: maximum: официально None, у нас 9223372036854775807$",
     # Географические координаты (LocationAttachment/LocationAttachmentRequest):
     # оригинал объявляет latitude/longitude как number без границ. Диапазоны
     # -90..90 и -180..180 — не наша выдумка, а определение широты/долготы
