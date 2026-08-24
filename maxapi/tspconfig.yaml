@@ -5,8 +5,12 @@ options:
     file-type: yaml
     output-file: "openapi.{service-name}.yaml"
     # Требование КБ: у object-схем должны быть явные свойства и
-    # additionalProperties: false. Опция запечатывает все object-схемы
-    # (эмиттер пишет эквивалентное `additionalProperties: {not: {}}`),
+    # additionalProperties: false. Опция запечатывает все object-схемы,
     # кроме базовых схем, расширяемых через allOf, — их запечатать нельзя,
-    # не сломав наследование. См. DEVIATIONS в scripts/compare.py.
+    # не сломав наследование. Эмиттер пишет эквивалентное
+    # `additionalProperties: {not: {}}` — это зашито в
+    # @typespec/openapi3/schema-emitter.js и не настраивается через
+    # tspconfig.yaml, поэтому scripts/seal_additional_properties.py
+    # переписывает результат `tsp compile` на литеральный `false`
+    # (см. package.json test-скрипт). См. DEVIATIONS в scripts/compare.py.
     seal-object-schemas: true

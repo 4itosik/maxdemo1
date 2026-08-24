@@ -128,9 +128,12 @@ DEVIATIONS = [
     # любое другое расхождение тех же ключей всплывало как DIFF.
     # ------------------------------------------------------------------
     # seal-object-schemas: все object-схемы (кроме расширяемых через allOf
-    # базовых) запечатаны эквивалентом additionalProperties: false —
-    # эмиттер пишет `{not: {}}`.
-    r"additionalProperties: официально None, у нас \{'not': \{\}\}$",
+    # базовых) запечатаны через additionalProperties: false. Эмиттер сам
+    # пишет эквивалентное `{not: {}}` (не настраивается через tspconfig.yaml —
+    # зашито в @typespec/openapi3/schema-emitter.js), поэтому
+    # scripts/seal_additional_properties.py переписывает результат
+    # `tsp compile` на литеральный `false` перед сверкой.
+    r"additionalProperties: официально None, у нас False$",
     # Числа: явные границы (требование КБ). int64-идентификаторы и
     # unix-время — 0..2^53-1 (JSON-safe диапазон: ID крупнее 2^53 теряли бы
     # точность в JS-клиентах, включая веб-клиент MAX); int32 и счётчики/
@@ -312,11 +315,10 @@ def cmp_schema(a, b, ra, rb, path, seen, is_disc_prop=False):
     elif "items" in a:
         cmp_schema(a["items"], b["items"], ra, rb, f"{path}[]", seen)
     ap, bp = a.get("additionalProperties"), b.get("additionalProperties")
-    if isinstance(ap, dict) or isinstance(bp, dict):
-        if isinstance(ap, dict) and isinstance(bp, dict):
-            cmp_schema(ap, bp, ra, rb, f"{path}{{}}", seen)
-        else:
-            report(path, f"additionalProperties: официально {ap!r}, у нас {bp!r}")
+    if isinstance(ap, dict) and isinstance(bp, dict):
+        cmp_schema(ap, bp, ra, rb, f"{path}{{}}", seen)
+    elif ap != bp:
+        report(path, f"additionalProperties: официально {ap!r}, у нас {bp!r}")
     da = a.get("discriminator", {})
     db = b.get("discriminator", {})
     if da.get("propertyName") != db.get("propertyName"):
