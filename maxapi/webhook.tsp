@@ -46,8 +46,7 @@ interface WebhookReceiver {
   @route("/")
   @post
   receiveUpdate(
-    /** Секрет, заданный при создании подписки (см. SubscriptionRequestBody.secret) */
-    // 5..256 — значение из официальной схемы MAX (SubscriptionRequestBody.secret)
+    /** Секрет, заданный при создании подписки (см. SubscriptionRequestBody.secret). 5..256 — значение из официальной схемы MAX */
     @minLength(5)
     @maxLength(256)
     @pattern("^[a-zA-Z0-9_-]{5,256}$")
@@ -104,14 +103,12 @@ model UpdateUnified {
   /** Нажатие callback-кнопки. [message_callback] */
   callback?: MaxBotApi.Callback;
 
-  /** Новое название чата. [chat_title_changed] */
-  // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
+  /** Новое название чата. 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title). [chat_title_changed] */
   @maxLength(200)
   @pattern("^[\\w\\W]{0,200}$")
   title?: string;
 
-  /** Данные из диплинка, переданные при запуске бота. [bot_started] */
-  // 512 — значение из официальной схемы MAX (BotStartedUpdate.payload)
+  /** Данные из диплинка, переданные при запуске бота. 512 — значение из официальной схемы MAX (BotStartedUpdate.payload). [bot_started] */
   @maxLength(512)
   @pattern("^[\\w\\W]{0,512}$")
   payload?: string | null;
@@ -145,8 +142,7 @@ model UpdateUnified {
   /** Созданный чат. [message_chat_created] */
   chat?: MaxBotApi.Chat;
 
-  /** Полезная нагрузка кнопки чата. [message_chat_created] */
-  // 512 — официальный лимит источника значения (ChatButton.start_payload)
+  /** Полезная нагрузка кнопки чата. 512 — официальный лимит источника значения (ChatButton.start_payload). [message_chat_created] */
   @maxLength(512)
   @pattern("^[\\w\\W]{0,512}$")
   start_payload?: string | null;

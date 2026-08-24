@@ -69,8 +69,7 @@ model SimpleQueryResult {
 
 /** Общая схема, описывающая объект изображения */
 model Image {
-  /** URL изображения */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** URL изображения. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @maxLength(2048)
   @pattern("^[\\w\\W]{0,2048}$")
   url: string;

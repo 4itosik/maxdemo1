@@ -30,8 +30,7 @@ interface Subscriptions {
   @route("/subscriptions")
   @delete
   unsubscribe(
-    /** URL, который нужно удалить из подписок на WebHook. Webhook-endpoint обязан начинаться с `https://` */
-    // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+    /** URL, который нужно удалить из подписок на WebHook. Webhook-endpoint обязан начинаться с `https://`. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
     @maxLength(2048)
     @pattern("^https://.+$")
     @query url: string,

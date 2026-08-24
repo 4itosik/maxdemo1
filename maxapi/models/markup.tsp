@@ -3,8 +3,7 @@ namespace MaxBotApi;
 /** Элемент разметки текста сообщения */
 @discriminator("type")
 model MarkupElement {
-  /** Тип элемента разметки */
-  // 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+  /** Тип элемента разметки. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name) */
   @maxLength(64)
   @pattern("^[a-z_]+$")
   type: string;
@@ -43,8 +42,7 @@ model LinkMarkup extends MarkupElement {
   /** Тип элемента разметки: `link` */
   type: "link";
 
-  /** URL ссылки */
-  // 2048 — значение из официальной схемы MAX
+  /** URL ссылки. 2048 — значение из официальной схемы MAX */
   @minLength(1)
   @maxLength(2048)
   @pattern("^[\\w\\W]{1,2048}$")

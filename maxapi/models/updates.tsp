@@ -10,8 +10,7 @@ namespace MaxBotApi;
  */
 @discriminator("update_type")
 model Update {
-  /** Тип события */
-  // 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+  /** Тип события. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name) */
   @maxLength(64)
   @pattern("^[a-z_]+$")
   update_type: string;
@@ -134,8 +133,7 @@ model BotStartedUpdate extends Update {
   /** Пользователь, который нажал кнопку `Start` */
   user: User;
 
-  /** Дополнительные данные из диплинков, переданные при запуске бота */
-  // 512 — значение из официальной схемы MAX
+  /** Дополнительные данные из диплинков, переданные при запуске бота. 512 — значение из официальной схемы MAX */
   @maxLength(512)
   @pattern("^[\\w\\W]{0,512}$")
   payload?: string | null;
@@ -178,8 +176,7 @@ model ChatTitleChangedUpdate extends Update {
   /** Пользователь, который изменил название */
   user: User;
 
-  /** Новое название */
-  // 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
+  /** Новое название. 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title) */
   @maxLength(200)
   @pattern("^[\\w\\W]{0,200}$")
   title: string;
@@ -347,8 +344,7 @@ model MessageChatCreatedUpdate extends Update {
   /** ID сообщения, где была нажата кнопка */
   message_id: MessageId;
 
-  /** Полезная нагрузка от кнопки чата */
-  // 512 — официальный лимит источника значения (ChatButton.start_payload)
+  /** Полезная нагрузка от кнопки чата. 512 — официальный лимит источника значения (ChatButton.start_payload) */
   @maxLength(512)
   @pattern("^[\\w\\W]{0,512}$")
   start_payload?: string | null;
@@ -360,8 +356,7 @@ model MessageChatCreatedUpdate extends Update {
  * бот должен быть администратором
  */
 model UpdateList {
-  /** Список обновлений о событиях в чатах и каналах, в которые добавлен бот */
-  // 1000 — зеркало максимума параметра limit у GET /updates
+  /** Список обновлений о событиях в чатах и каналах, в которые добавлен бот. 1000 — зеркало максимума параметра limit у GET /updates */
   @maxItems(1000)
   updates: Update[];
 
@@ -373,8 +368,7 @@ model UpdateList {
 
 /** Схема для описания подписки на WebHook */
 model Subscription {
-  /** URL вебхука */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** URL вебхука. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @maxLength(2048)
   @pattern("^[\\w\\W]{0,2048}$")
   url: string;
@@ -397,8 +391,7 @@ model Subscription {
 
 /** Запрос на настройку подписки WebHook */
 model SubscriptionRequestBody {
-  /** URL HTTPS-endpoint вашего бота. Должен начинаться с `https://` */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** URL HTTPS-endpoint вашего бота. Должен начинаться с `https://`. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @maxLength(2048)
   @pattern("^https://.+$")
   url: string;
@@ -411,9 +404,8 @@ model SubscriptionRequestBody {
    * Секрет, который должен быть отправлен в заголовке `X-Max-Bot-Api-Secret`
    * в каждом запросе Webhook. Разрешены только символы `A-Z`, `a-z`, `0-9`,
    * и дефис. Заголовок рекомендован, чтобы запрос поступал из установленного
-   * веб-узла
+   * веб-узла. 5..256 — значение из официальной схемы MAX
    */
-  // 5..256 — значение из официальной схемы MAX
   @minLength(5)
   @maxLength(256)
   @pattern("^[a-zA-Z0-9_-]{5,256}$")

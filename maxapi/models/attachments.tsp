@@ -3,8 +3,7 @@ namespace MaxBotApi;
 /** Общая схема, представляющая вложение сообщения */
 @discriminator("type")
 model Attachment {
-  /** Тип вложения */
-  // 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name)
+  /** Тип вложения. 64 — в оригинале лимита нет; по аналогии с официальным лимитом коротких имён (BotCommand.name) */
   @maxLength(64)
   @pattern("^[a-z_]+$")
   type: string;
@@ -17,9 +16,9 @@ model AttachmentPayload {
    * отправки сообщения в чат.
    *
    * Прямую ссылку на видео также можно получить с помощью метода
-   * `GET /videos/{-videoToken-}`
+   * `GET /videos/{-videoToken-}`. 2048 — официальный лимит URL в оригинальной
+   * схеме (LinkButton.url, LinkMarkup.url)
    */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
   @maxLength(2048)
   @pattern("^[\\w\\W]{0,2048}$")
   url: string;
@@ -32,14 +31,12 @@ model PhotoAttachmentPayload {
   @maxValue(9007199254740991)
   photo_id: int64;
 
-  /** Токен вложения */
-  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  /** Токен вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload) */
   @maxLength(1024)
   @pattern("^[\\w\\W]{0,1024}$")
   token: string;
 
-  /** URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** URL изображения. Время жизни ссылки ограничено: срок истечения указан в параметре `expires`, после чего ссылку необходимо запросить повторно. Пока доступно только в веб-клиенте. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @maxLength(2048)
   @pattern("^[\\w\\W]{0,2048}$")
   url: string;
@@ -47,8 +44,7 @@ model PhotoAttachmentPayload {
 
 /** Полезная нагрузка медиа-вложения (видео/аудио) */
 model MediaAttachmentPayload extends AttachmentPayload {
-  /** Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении */
-  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  /** Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload) */
   @maxLength(1024)
   @pattern("^[\\w\\W]{0,1024}$")
   token: string;
@@ -56,8 +52,7 @@ model MediaAttachmentPayload extends AttachmentPayload {
 
 /** Полезная нагрузка файлового вложения */
 model FileAttachmentPayload extends AttachmentPayload {
-  /** Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении */
-  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  /** Используйте `token`, если вы пытаетесь повторно использовать одно и то же вложение в другом сообщении. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload) */
   @maxLength(1024)
   @pattern("^[\\w\\W]{0,1024}$")
   token: string;
@@ -65,8 +60,7 @@ model FileAttachmentPayload extends AttachmentPayload {
 
 /** Полезная нагрузка вложения-контакта */
 model ContactAttachmentPayload {
-  /** Информация о пользователе в формате VCF */
-  // 4096 — в оригинале лимита нет; запас под VCF-карточку
+  /** Информация о пользователе в формате VCF. 4096 — в оригинале лимита нет; запас под VCF-карточку */
   @maxLength(4096)
   @pattern("^[\\w\\W]{0,4096}$")
   vcf_info?: string | null;
@@ -94,15 +88,13 @@ model StickerAttachmentPayload extends AttachmentPayload {
 
 /** Полезная нагрузка запроса ShareAttachmentRequest */
 model ShareAttachmentPayload {
-  /** URL, прикрепленный к сообщению в качестве предпросмотра медиа */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** URL, прикрепленный к сообщению в качестве предпросмотра медиа. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @minLength(1)
   @maxLength(2048)
   @pattern("^[\\w\\W]{1,2048}$")
   url?: string | null;
 
-  /** Токен вложения */
-  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  /** Токен вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload) */
   @maxLength(1024)
   @pattern("^[\\w\\W]{0,1024}$")
   token?: string | null;
@@ -110,8 +102,7 @@ model ShareAttachmentPayload {
 
 /** Миниатюра видео */
 model VideoThumbnail {
-  /** URL изображения */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** URL изображения. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @maxLength(2048)
   @pattern("^[\\w\\W]{0,2048}$")
   url: string;
@@ -162,8 +153,7 @@ model VideoUrls {
 
 /** Подробная информация о видео-вложении */
 model VideoAttachmentDetails {
-  /** Токен видео-вложения */
-  // 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload)
+  /** Токен видео-вложения. 1024 — в оригинале лимита нет; по аналогии с официальным лимитом кнопочного payload (CallbackButton.payload) */
   @maxLength(1024)
   @pattern("^[\\w\\W]{0,1024}$")
   token: string;
@@ -234,10 +224,12 @@ model AudioAttachment extends Attachment {
   /** Полезная нагрузка аудио-вложения */
   payload: MediaAttachmentPayload;
 
-  /** Аудио транскрипция */
-  // TODO: 255 — временно, пока транскрипции не используются. Реальная
-  // транскрипция длинного голосового (до 60 мин) в этот лимит не влезет —
-  // при включении фичи поднять лимит и длину в pattern (в оригинале лимита нет).
+  /**
+   * Аудио транскрипция. 255 — в оригинале лимита нет; временный лимит, пока
+   * транскрипции не используются
+   */
+  // TODO: реальная транскрипция длинного голосового (до 60 мин) в этот лимит
+  // не влезет — при включении фичи поднять лимит и длину в pattern.
   @maxLength(255)
   @pattern("^[\\w\\W]{0,255}$")
   transcription?: string | null;
@@ -317,8 +309,7 @@ model ShareAttachment extends Attachment {
   @pattern("^[\\w\\W]{0,255}$")
   description?: string | null;
 
-  /** Изображение предпросмотра ссылки */
-  // 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+  /** Изображение предпросмотра ссылки. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url) */
   @maxLength(2048)
   @pattern("^[\\w\\W]{0,2048}$")
   image_url?: string | null;
@@ -347,8 +338,7 @@ model DataAttachment extends Attachment {
   /** Тип вложения: `data` */
   type: "data";
 
-  /** Полезная нагрузка, отправленная через SendMessageButton */
-  // 1024 — официальный лимит источника значения (ReplyButton.payload, maxLength 1024 в оригинале)
+  /** Полезная нагрузка, отправленная через SendMessageButton. 1024 — официальный лимит источника значения (ReplyButton.payload, maxLength 1024 в оригинале) */
   @maxLength(1024)
   @pattern("^[\\w\\W]{0,1024}$")
   data: string;
