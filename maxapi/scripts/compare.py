@@ -134,6 +134,23 @@ DEVIATIONS = [
     # scripts/seal_additional_properties.py переписывает результат
     # `tsp compile` на литеральный `false` перед сверкой.
     r"additionalProperties: официально None, у нас False$",
+    # Недостижимые схемы вычищаются из готового YAML
+    # (scripts/prune_unused_schemas.py) — требование SCHEMA-валидатора
+    # «Potentially unused component». Отсутствуют по двум причинам:
+    # 1) обслуживают выключенный набор маршрутов (`// import
+    #    "./routes/chats.tsp"` в main.tsp) — сюда же попадают их транзитивные
+    #    зависимости (ChatAdmin, ChatAdminPermission, ChatMember,
+    #    FailedUserDetails, SenderAction), больше ниоткуда не достижимые;
+    # 2) сироты самого оригинала, на которые и он ни разу не ссылается —
+    #    BotPatch, Intent, PhotoTokens.
+    # Первопричина остаётся видимой как отдельные расхождения
+    # `paths./chats*: путь отсутствует у нас` — здесь глушим только следствие.
+    # Список пришпилен поимённо: пропажа любой ДРУГОЙ схемы всплывёт как DIFF.
+    r"^schemas\.(ActionRequestBody|BotPatch|ChatAdmin|ChatAdminPermission"
+    r"|ChatAdminsList|ChatList|ChatMember|ChatMembersList|ChatPatch"
+    r"|FailedUserDetails|GetPinnedMessageResult|Intent|ModifyMembersResult"
+    r"|PhotoTokens|PinMessageBody|SenderAction|UserIdsList)"
+    r": схема отсутствует у нас$",
     # Числа: явные границы (требование КБ). int64-идентификаторы и
     # unix-время — 0..2^53-1 (JSON-safe диапазон: ID крупнее 2^53 теряли бы
     # точность в JS-клиентах, включая веб-клиент MAX); int32 и счётчики/
@@ -141,6 +158,14 @@ DEVIATIONS = [
     r"minimum: официально None, у нас 0$",
     r"maximum: официально None, у нас 9007199254740991$",
     r"maximum: официально None, у нас 2147483647$",
+    # Географические координаты (LocationAttachment/LocationAttachmentRequest):
+    # оригинал объявляет latitude/longitude как number без границ. Диапазоны
+    # -90..90 и -180..180 — не наша выдумка, а определение широты/долготы
+    # (WGS 84); заодно закрывают то же требование КБ о minimum/maximum.
+    r"latitude: minimum: официально None, у нас -90$",
+    r"latitude: maximum: официально None, у нас 90$",
+    r"longitude: minimum: официально None, у нас -180$",
+    r"longitude: maximum: официально None, у нас 180$",
     # Строковые поля: maxLength. Значения по классам полей: 255 — дефолт
     # для строк без явного размера (включая message_id/mid и — временно,
     # пока не используется, — транскрипцию аудио); 64 — типы

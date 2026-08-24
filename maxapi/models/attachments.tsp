@@ -320,10 +320,14 @@ model LocationAttachment extends Attachment {
   /** Тип вложения: `location` */
   type: "location";
 
-  /** Широта */
+  /** Широта. Диапазон от -90 до 90 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы */
+  @minValue(-90)
+  @maxValue(90)
   latitude: float64;
 
-  /** Долгота */
+  /** Долгота. Диапазон от -180 до 180 — требование КБ (числовой тип должен иметь minimum/maximum); в оригинальной схеме MAX границы не заданы */
+  @minValue(-180)
+  @maxValue(180)
   longitude: float64;
 }
 
