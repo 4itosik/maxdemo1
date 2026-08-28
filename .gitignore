@@ -20,6 +20,15 @@ node_modules/
 tsp-output/
 __pycache__/
 
+# Промежуточная JSON Schema для quicktype: единственный её потребитель —
+# `npm run gen:go`, а результат (maxapi/gen/go/models.go) в git есть.
+# Готовые контракты maxapi/openapi.*.yaml НЕ игнорируются намеренно.
+/maxapi/gen/max.schema.json
+
+# Отчёт `make compare-gen`: целиком выводится из двух models.go, которые в git.
+/maxapi/gen/compare.json
+
+
 # --- Артефакты сборки — maxbotdemo (было: /bot, /bin/) ---
 /maxbotdemo/bot
 /maxbotdemo/bin/

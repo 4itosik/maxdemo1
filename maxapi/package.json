@@ -4,14 +4,20 @@
   "private": true,
   "description": "TypeSpec-описание Max Bot API (https://dev.max.ru/docs-api)",
   "scripts": {
-    "test": "npm run build && npm run validate && python3 scripts/compare.py",
-    "build": "tsp compile . && python3 scripts/seal_additional_properties.py && python3 scripts/fill_inherited_stubs.py && python3 scripts/apply_int_bounds.py && python3 scripts/prune_unused_schemas.py && python3 scripts/flatten_discriminated_unions.py && python3 scripts/annotate_composites.py",
-    "validate": "python3 scripts/validate_kb.py -q"
+    "test": "npm run build && npm run validate && npm run gen && cd gen/quicktype && go test ./... && cd ../example-quicktype && go test ./... && cd ../example-oapi-codegen && go test ./... && cd .. && python3 scripts/compare.py",
+    "build": "tsp compile . && python3 scripts/seal_additional_properties.py && python3 scripts/fill_inherited_stubs.py && python3 scripts/apply_int_bounds.py && python3 scripts/prune_unused_schemas.py && python3 scripts/flatten_discriminated_unions.py && python3 scripts/annotate_composites.py && python3 scripts/publish_openapi.py",
+    "validate": "python3 scripts/validate_kb.py -q",
+    "gen:quicktype": "python3 scripts/openapi_to_jsonschema.py && npx quicktype -s schema -l go --package maxapi --just-types-and-package --omit-empty --no-combine-classes -t MaxBotAPI -o gen/quicktype/models.go gen/max.schema.json && python3 scripts/finalize_go_models.py",
+    "gen:oapi-codegen": "npm run install:tools && oapi-codegen -config gen/oapi-codegen/oapi-codegen.yaml openapi.MaxBotApi.yaml && cd gen/oapi-codegen && go build ./... && go test ./...",
+    "gen": "npm run gen:quicktype && npm run gen:oapi-codegen",
+    "compare:gen": "npm run gen && python3 scripts/compare_generators.py",
+    "install:tools": "python3 scripts/install_tools.py"
   },
   "devDependencies": {
     "@typespec/compiler": "^1.13.0",
     "@typespec/http": "^1.13.0",
     "@typespec/openapi": "^1.13.0",
-    "@typespec/openapi3": "^1.13.0"
+    "@typespec/openapi3": "^1.13.0",
+    "quicktype": "^26.0.0"
   }
 }

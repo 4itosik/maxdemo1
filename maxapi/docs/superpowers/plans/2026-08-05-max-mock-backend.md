@@ -47,7 +47,7 @@ maxmoc/
 ├── web/             index.html (админка), chat.html, app.js, style.css
 ├── e2e/             тесты полного цикла
 ├── scripts/smoke.sh
-└── config.example.yaml, Makefile, README.md
+└── config.example-quicktype.yaml, Makefile, README.md
 ```
 
 ## Справочник контракта (сверено с yaml)
@@ -103,7 +103,7 @@ maxmoc/
 ## Task 1 — Каркас
 
 **Files:** `go.mod`, `.gitignore`, `internal/config/{config.go,config_test.go}`,
-`config.example.yaml`, `Makefile`, `cmd/max-mock/main.go`
+`config.example-quicktype.yaml`, `Makefile`, `cmd/max-mock/main.go`
 
 `config.Config{Listen, PublicBaseURL, DBPath, BlobDir string; LogRetentionDays int;
 ValidateResponses bool; Webhook{TimeoutSec, Retries int; BackoffSec []int}}`.
