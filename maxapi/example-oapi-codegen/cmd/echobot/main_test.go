@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	maxapi "maxapi-oapi-codegen"
 	"example-oapi-codegen/maxclient"
 	"example-oapi-codegen/webhook"
+	"stash.sigma.sbrf.ru/scpl/oapi/maxapi"
 )
 
 const liveMessageCreated = `{

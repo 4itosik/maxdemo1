@@ -1,4 +1,4 @@
-module maxapi-oapi-codegen
+module stash.sigma.sbrf.ru/scpl/oapi/maxapi
 
 go 1.24.0
 

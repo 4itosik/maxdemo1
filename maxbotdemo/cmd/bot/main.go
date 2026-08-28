@@ -35,7 +35,12 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
-	cfg, err := loadConfig(os.Getenv)
+	getenv, err := environment(os.Args[1:])
+	if err != nil {
+		return err
+	}
+
+	cfg, err := loadConfig(getenv)
 	if err != nil {
 		return err
 	}

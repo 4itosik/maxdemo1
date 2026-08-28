@@ -11,7 +11,7 @@ example-oapi-codegen/
 └── cmd/echobot/ связка: подписался → слушает → отвечает
 ```
 
-Отдельный Go-модуль с `replace maxapi-oapi-codegen => ../gen/oapi-codegen`.
+Отдельный Go-модуль с `replace stash.sigma.sbrf.ru/scpl/oapi/maxapi => ../gen/oapi-codegen`.
 
 ```bash
 go test ./...                     # сети не касается

@@ -28,7 +28,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	maxapi "maxapi-oapi-codegen"
+	"stash.sigma.sbrf.ru/scpl/oapi/maxapi"
 )
 
 // maxBodySize ограничивает тело запроса: крупнейшее событие — message_created

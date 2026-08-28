@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	maxapi "maxapi-oapi-codegen"
+	"stash.sigma.sbrf.ru/scpl/oapi/maxapi"
 )
 
 // Те же тела, что в ../../example-quicktype/webhook/server_test.go: сравнивать два

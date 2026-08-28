@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	maxapi "maxapi-oapi-codegen"
+	"stash.sigma.sbrf.ru/scpl/oapi/maxapi"
 )
 
 // DefaultBaseURL — адрес Max Bot API из контракта (`servers`).

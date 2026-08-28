@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	maxapi "maxapi-oapi-codegen"
+	"stash.sigma.sbrf.ru/scpl/oapi/maxapi"
 )
 
 type capture struct {
