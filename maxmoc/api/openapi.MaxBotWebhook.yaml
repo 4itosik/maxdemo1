@@ -1,3 +1,102 @@
+# --- КБ[125]: почему в документе остались oneOf/allOf/anyOf ---
+# Замечание SCHEMA-валидатора: «Не рекомендуется использовать oneOf, anyOf,
+# allOf совместно с другими ключами, т.к. композитная часть будет
+# проигнорирована при генерации».
+#
+# Композитных позиций в документе — 59, и все они относятся к случаям ниже;
+# у каждой стоит однострочный комментарий с буквой случая. Развёрнутый разбор —
+# в maxapi/README.md, раздел «Что остаётся композитным — и почему это потолок».
+#
+# Главное про все пять случаев сразу: КОМПОЗИЦИЯ ЗДЕСЬ НЕ НАША ВЫДУМКА. У каждого
+# случая (кроме [E], которого в оригинале и не может быть) есть буквальный аналог
+# в официальном контракте MAX — ниже, под пометкой «В ОРИГИНАЛЕ», приведены
+# конкретные схемы. Источник сравнения: max-messenger-bot/max-bot-api-schemas,
+# файл schema_2026_08_11.json (версия API 0.0.33), копия без изменений лежит в
+# maxapi/reference/max-openapi-official.json; человекочитаемая версия того же —
+# на dev.max.ru/docs-api, страницы объектов по адресу /docs-api/objects/<Имя>.
+#
+# [A] oneOf + discriminator + description — 6 поз.
+#     Базы полиморфных полей: updates[], attachments[], markup[], ряды кнопок,
+#     тело вебхука. Это каноническая для OpenAPI запись дискриминированного
+#     union'а; соседние ключи — часть той же конструкции (discriminator) и
+#     требование КБ (description). Прежняя форма — база-объект со свойствами
+#     плюс наследники через allOf — валидаторами тела не проверяется: у
+#     полиморфного поля контролируются только свойства базы, у
+#     AttachmentRequest это один type. Замер на kin-openapi: из 13 заведомо
+#     некорректных тел (широта 991, вложение несуществующего типа, событие с
+#     лишним полем, кнопка без обязательного text) прежняя форма принимала 11,
+#     нынешняя — ни одного. Каждый вариант объявлен целиком, поэтому
+#     «игнорирование композитной части» при генерации ничего не теряет.
+#     В ОРИГИНАЛЕ: те же шесть дискриминаторов с теми же значениями mapping —
+#     Attachment, AttachmentRequest, Button, ReplyButton, MarkupElement, Update.
+#     Полиморфизм здесь не наш выбор, он в предметной области; отличается только
+#     запись. У MAX база — объект со свойством type и discriminator, а варианты
+#     ссылаются на неё через allOf:
+#         Attachment:       {discriminator: {propertyName: type, mapping: {...9}},
+#                            properties: {type: {type: string}}, required: [type]}
+#         PhotoAttachment:  {allOf: [{$ref: Attachment}, {properties: {payload},
+#                            required: [payload]}]}
+#     Сайт при этом показывает варианты уже развёрнутыми: на странице
+#     dev.max.ru/docs-api/objects/Update перечислены все типы событий, а
+#     update_type прямо назван полем, которое их различает.
+#
+# [B] allOf вокруг одиночного $ref + description — 39 поз.
+#     В OpenAPI 3.0 ключи рядом с $ref игнорируются, и описание поля потерялось
+#     бы; описание требует КБ. Обойти нельзя: на форму {$ref, description}
+#     kin-openapi отвечает ошибкой загрузки «extra sibling fields», тот же
+#     запрет у Spectral (no-$ref-siblings). Переход на OpenAPI 3.1 проверен и
+#     делает хуже — 206 композитных позиций вместо 130.
+#     В ОРИГИНАЛЕ: 54 таких позиций, форма посимвольно та же —
+#         Chat.type:      {allOf: [{$ref: ChatType}], description: ...}
+#         Chat.status:    {allOf: [{$ref: ChatStatus}], description: ...}
+#         Message.sender: {allOf: [{$ref: User}], description: ..., readOnly: false}
+#     (dev.max.ru/docs-api/objects/Chat, /objects/Message).
+#
+# [C] allOf вокруг одиночного $ref + nullable — 9 поз.
+#     То же ограничение 3.0, но здесь на кону семантика, а не оформление:
+#     nullable рядом с $ref игнорируется, и поле перестаёт принимать null.
+#     Проверено на kin-openapi.
+#     В ОРИГИНАЛЕ: 17 таких позиций —
+#         Chat.icon:           {allOf: [{$ref: Image}], description: ..., nullable: true}
+#         Chat.pinned_message: {allOf: [{$ref: Message}], description: ..., nullable: true,
+#                               readOnly: false}
+#         Message.link:        {allOf: [{$ref: LinkedMessage}], description: ..., nullable: true}
+#     (dev.max.ru/docs-api/objects/Chat, /objects/Message).
+#
+# [D] allOf-наследование без дискриминатора — 4 поз.
+#     Union'ами эти семейства не являются, в oneOf не сводятся. Расплющить их
+#     в обычные объекты технически можно, но у AttachmentPayload это сделало бы
+#     базу недостижимой (её удалил бы prune_unused_schemas), а у UserWithPhoto
+#     — молча потеряло бы 7 свойств, которым эмиттер не выписывает стабы, так
+#     как она сама база.
+#     В ОРИГИНАЛЕ: те же схемы записаны точно так же, одна в одну —
+#         FileAttachmentPayload:    {allOf: [{$ref: AttachmentPayload}, {properties: ...}]}
+#         MediaAttachmentPayload:   {allOf: [{$ref: AttachmentPayload}, {properties: ...}]}
+#         StickerAttachmentPayload: {allOf: [{$ref: AttachmentPayload}, {properties: ...}]}
+#         UserWithPhoto:            {allOf: [{$ref: User}, {properties: ...}]}
+#     Наследование зафиксировано и в текстах: страница
+#     dev.max.ru/docs-api/objects/UserWithPhoto называет объект «наследником
+#     схемы User» и показывает все 10 полей, включая унаследованные.
+#     Всего таких позиций в оригинале 54 — у нас осталось 4.
+#
+# [E] anyOf без соседних ключей — 1 поз.
+#     Тело вебхука описано двумя равноправными формами: плоской UpdateUnified и
+#     строгим oneOf WebhookUpdate. Посторонних ключей рядом нет, требование
+#     [125] эта позиция не нарушает. Цена известна: anyOf проходит при
+#     совпадении хотя бы одной ветви, поэтому свои исходящие события следует
+#     сверять напрямую со схемой WebhookUpdate, а не с телом операции.
+#     В ОРИГИНАЛЕ: аналога нет и быть не может — контракт webhook-эндпоинта MAX
+#     не публикует, его реализует разработчик бота. Ни одного anyOf в
+#     официальной схеме нет.
+#
+# Итог сравнения: в официальной схеме MAX 125 композитных позиций
+# (54 случая [B] + 17 случая [C] + 54 случая [D]), в этом
+# документе — 59. Настоящего allOf-наследования почти не осталось: шесть
+# семейств переписаны в oneOf + discriminator. То есть по требованию [125]
+# документ уже чище источника, транскрипцией которого является, а всё
+# оставшееся — это либо форма, скопированная у MAX, либо ограничение самого
+# OpenAPI 3.0.
+# --- конец КБ[125] ---
 openapi: 3.0.0
 info:
   title: Max Bot Webhook
@@ -52,6 +151,7 @@ paths:
         content:
           application/json:
             schema:
+              # КБ[125] [E] две равноправные формы тела на выбор разработчика бота; аналога в оригинале нет — вебхук MAX не публикует
               anyOf:
                 - $ref: '#/components/schemas/UpdateUnified'
                 - $ref: '#/components/schemas/WebhookUpdate'
@@ -59,6 +159,7 @@ paths:
 components:
   schemas:
     MaxBotApi.Attachment:
+      # КБ[125] [A] полиморфное поле: тот же discriminator, что в оригинале MAX; без oneOf проверялись бы только свойства базы
       oneOf:
         - $ref: '#/components/schemas/MaxBotApi.PhotoAttachment'
         - $ref: '#/components/schemas/MaxBotApi.VideoAttachment'
@@ -115,6 +216,7 @@ components:
             - audio
           description: 'Тип вложения: `audio`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MediaAttachmentPayload'
           description: Полезная нагрузка аудио-вложения
@@ -149,6 +251,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, куда был добавлен бот. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, добавивший бота в чат
@@ -184,6 +287,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, откуда был удалён бот. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, удаливший бота из чата
@@ -218,6 +322,7 @@ components:
           maximum: 9007199254740991
           description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который нажал кнопку `Start`
@@ -262,6 +367,7 @@ components:
           maximum: 9007199254740991
           description: ID диалога, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который остановил бота
@@ -279,6 +385,7 @@ components:
       additionalProperties: false
       description: Вы получите это событие, как только пользователь остановит бота в его настройках в МАКС
     MaxBotApi.Button:
+      # КБ[125] [A] полиморфное поле: тот же discriminator, что в оригинале MAX; без oneOf проверялись бы только свойства базы
       oneOf:
         - $ref: '#/components/schemas/MaxBotApi.CallbackButton'
         - $ref: '#/components/schemas/MaxBotApi.LinkButton'
@@ -330,6 +437,7 @@ components:
           pattern: ^[\w\W]{0,1024}$
           description: 'Токен кнопки. 1024 — официальный лимит источника значения: токен приходит из CallbackButton.payload (maxLength 1024 в оригинале)'
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, нажавший на кнопку
@@ -380,10 +488,12 @@ components:
           maximum: 9007199254740991
           description: ID чата или канала — в зависимости от ограничений метода и от того, с чем вы работаете. Как получить ID — в разделе «Получение chat_id»
         type:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.ChatType'
           description: 'Тип чата: `"chat"` — Групповой чат, `"channel"` — Канал, `"dialog"` — Диалог'
         status:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.ChatStatus'
           description: 'Статус чата: `"active"` — Бот является активным участником чата, `"removed"` — Бот был удалён из чата, `"left"` — Бот покинул чат, `"closed"` — Чат был закрыт'
@@ -395,6 +505,7 @@ components:
           description: Отображаемое название чата или канала. Может быть `null` для диалогов. 200 — официальный лимит названия чата (ChatButton.chat_title, ChatPatch.title)
         icon:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Image'
           nullable: true
@@ -441,6 +552,7 @@ components:
           description: Описание чата или канала. 400 — официальный лимит описания чата (ChatButton.chat_description)
         dialog_with_user:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.UserWithPhoto'
           nullable: true
@@ -453,6 +565,7 @@ components:
           description: Количество сообщений в групповых чатах и каналах
         pinned_message:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Message'
           nullable: true
@@ -546,6 +659,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который изменил название
@@ -621,6 +735,7 @@ components:
             - contact
           description: 'Тип вложения: `contact`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.ContactAttachmentPayload'
           description: Полезная нагрузка вложения-контакта
@@ -646,6 +761,7 @@ components:
             аккаунту в МАКС. Подробнее — в разделе «Типы кнопок»
         max_info:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           nullable: true
@@ -695,6 +811,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который очистил историю сообщений
@@ -732,6 +849,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который отключил уведомления
@@ -776,6 +894,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который удалил чат
@@ -812,6 +931,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, который включил уведомления
@@ -870,6 +990,7 @@ components:
             - file
           description: 'Тип вложения: `file`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.FileAttachmentPayload'
           description: Полезная нагрузка файлового вложения
@@ -911,6 +1032,7 @@ components:
 
             схеме (LinkButton.url, LinkMarkup.url)'
       additionalProperties: false
+      # КБ[125] [D] наследование от MaxBotApi.AttachmentPayload
       allOf:
         - $ref: '#/components/schemas/MaxBotApi.AttachmentPayload'
       description: Полезная нагрузка файлового вложения
@@ -990,6 +1112,7 @@ components:
             - inline_keyboard
           description: 'Тип вложения: `inline_keyboard`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Keyboard'
           description: Полезная нагрузка клавиатуры
@@ -1073,10 +1196,12 @@ components:
         - message
       properties:
         type:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageLinkType'
           description: Тип связанного сообщения
         sender:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, отправивший сообщение
@@ -1087,6 +1212,7 @@ components:
           maximum: 9007199254740991
           description: Чат, в котором сообщение было изначально опубликовано. Только для пересланных сообщений. Как получить ID — в разделе «Получение chat_id»
         message:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageBody'
           description: Содержимое связанного (пересланного или ответного) сообщения
@@ -1119,6 +1245,7 @@ components:
       additionalProperties: false
       description: Вложение географического положения
     MaxBotApi.MarkupElement:
+      # КБ[125] [A] полиморфное поле: тот же discriminator, что в оригинале MAX; без oneOf проверялись бы только свойства базы
       oneOf:
         - $ref: '#/components/schemas/MaxBotApi.StrongMarkup'
         - $ref: '#/components/schemas/MaxBotApi.EmphasizedMarkup'
@@ -1169,6 +1296,7 @@ components:
 
             схеме (LinkButton.url, LinkMarkup.url)'
       additionalProperties: false
+      # КБ[125] [D] наследование от MaxBotApi.AttachmentPayload
       allOf:
         - $ref: '#/components/schemas/MaxBotApi.AttachmentPayload'
       description: Полезная нагрузка медиа-вложения (видео/аудио)
@@ -1180,10 +1308,12 @@ components:
         - body
       properties:
         sender:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, отправивший сообщение
         recipient:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Recipient'
           description: Получатель сообщения. Может быть пользователем или чатом
@@ -1195,16 +1325,19 @@ components:
           description: Время создания сообщения в формате Unix-time
         link:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.LinkedMessage'
           nullable: true
           description: Пересланное или ответное сообщение
         body:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageBody'
           description: Содержимое сообщения. Текст + вложения. Может быть `null`, если сообщение содержит только пересланное сообщение
         stat:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageStat'
           nullable: true
@@ -1225,6 +1358,7 @@ components:
         - text
       properties:
         mid:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageId'
           description: Уникальный ID сообщения
@@ -1305,11 +1439,13 @@ components:
             - message_callback
           description: 'Тип события: `message_callback`'
         callback:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Callback'
           description: Нажатая пользователем кнопка
         message:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Message'
           nullable: true
@@ -1344,10 +1480,12 @@ components:
             - message_chat_created
           description: 'Тип события: `message_chat_created`'
         chat:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Chat'
           description: Созданный чат
         message_id:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageId'
           description: ID сообщения, где была нажата кнопка
@@ -1385,6 +1523,7 @@ components:
             - message_created
           description: 'Тип события: `message_created`'
         message:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Message'
           description: Новое созданное сообщение
@@ -1415,6 +1554,7 @@ components:
             - message_edited
           description: 'Тип события: `message_edited`'
         message:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Message'
           description: Отредактированное сообщение
@@ -1459,6 +1599,7 @@ components:
             - message_removed
           description: 'Тип события: `message_removed`'
         message_id:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MessageId'
           description: ID удалённого сообщения
@@ -1567,6 +1708,7 @@ components:
             - image
           description: 'Тип вложения: `image`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.PhotoAttachmentPayload'
           description: Полезная нагрузка фото-вложения
@@ -1638,6 +1780,7 @@ components:
           maximum: 9007199254740991
           description: ID чата. Как получить ID — в разделе «Получение chat_id»
         chat_type:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.ChatType'
           description: Тип чата
@@ -1651,6 +1794,7 @@ components:
       additionalProperties: false
       description: Новый получатель сообщения. Может быть пользователем или чатом
     MaxBotApi.ReplyButton:
+      # КБ[125] [A] полиморфное поле: тот же discriminator, что в оригинале MAX; без oneOf проверялись бы только свойства базы
       oneOf:
         - $ref: '#/components/schemas/MaxBotApi.SendMessageButton'
         - $ref: '#/components/schemas/MaxBotApi.SendGeoLocationButton'
@@ -1834,6 +1978,7 @@ components:
             - share
           description: 'Тип вложения: `share`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.ShareAttachmentPayload'
           description: Полезная нагрузка предпросмотра ссылки
@@ -1889,6 +2034,7 @@ components:
             - sticker
           description: 'Тип вложения: `sticker`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.StickerAttachmentPayload'
           description: Полезная нагрузка вложения-стикера
@@ -1929,6 +2075,7 @@ components:
 
             схеме (LinkButton.url, LinkMarkup.url)'
       additionalProperties: false
+      # КБ[125] [D] наследование от MaxBotApi.AttachmentPayload
       allOf:
         - $ref: '#/components/schemas/MaxBotApi.AttachmentPayload'
       description: Полезная нагрузка вложения-стикера
@@ -2011,6 +2158,7 @@ components:
       additionalProperties: false
       description: Представляет подчёркнутый текст
     MaxBotApi.Update:
+      # КБ[125] [A] полиморфное поле: тот же discriminator, что в оригинале MAX; без oneOf проверялись бы только свойства базы
       oneOf:
         - $ref: '#/components/schemas/MaxBotApi.MessageCallbackUpdate'
         - $ref: '#/components/schemas/MaxBotApi.MessageEditedUpdate'
@@ -2129,6 +2277,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, добавленный в чат
@@ -2214,6 +2363,7 @@ components:
           maximum: 9007199254740991
           description: ID чата, где произошло событие. Как получить ID — в разделе «Получение chat_id»
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь, удалённый из чата
@@ -2257,6 +2407,7 @@ components:
           maxLength: 2048
           pattern: ^[\w\W]{0,2048}$
           description: URL аватара пользователя или бота в полном размере. 2048 — официальный лимит URL в оригинальной схеме (LinkButton.url, LinkMarkup.url)
+      # КБ[125] [D] наследование от MaxBotApi.User
       allOf:
         - $ref: '#/components/schemas/MaxBotApi.User'
       description: Объект с общей информацией о пользователе или боте. Является наследником схемы User — дополнительно к ней содержит URL аватара и описание
@@ -2272,11 +2423,13 @@ components:
             - video
           description: 'Тип вложения: `video`'
         payload:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.MediaAttachmentPayload'
           description: Полезная нагрузка видео-вложения
         thumbnail:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.VideoThumbnail'
           nullable: true
@@ -2342,6 +2495,7 @@ components:
           maximum: 9007199254740991
           description: ID чата. [bot_added, bot_started, bot_stopped, bot_removed, chat_title_changed, dialog_cleared, dialog_muted, dialog_unmuted, dialog_removed, message_removed, user_added, user_removed]
         user:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.User'
           description: Пользователь-инициатор события. [bot_added, bot_started, bot_stopped, bot_removed, chat_title_changed, dialog_cleared, dialog_muted, dialog_unmuted, dialog_removed, user_added, user_removed]
@@ -2356,11 +2510,13 @@ components:
           description: Признак «событие в канале, а не в чате». [bot_added, bot_removed, user_added, user_removed]
         message:
           type: object
+          # КБ[125] [C] обёртка одиночного $ref, как в оригинале MAX: иначе nullable рядом с $ref игнорируется и поле не примет null
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Message'
           nullable: true
           description: 'Сообщение: новое, отредактированное или с нажатой кнопкой (может быть null). [message_created, message_edited, message_callback]'
         callback:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Callback'
           description: Нажатие callback-кнопки. [message_callback]
@@ -2407,6 +2563,7 @@ components:
           maximum: 9007199254740991
           description: Автор удалённого сообщения. [message_removed]
         chat:
+          # КБ[125] [B] обёртка одиночного $ref, как в оригинале MAX: в OpenAPI 3.0 соседи $ref игнорируются, описание бы потерялось
           allOf:
             - $ref: '#/components/schemas/MaxBotApi.Chat'
           description: Созданный чат. [message_chat_created]
@@ -2424,6 +2581,7 @@ components:
         типа события. Удобна, когда на сервере хочется один класс/структуру
         на все события без union-машинерии.
     WebhookUpdate:
+      # КБ[125] [A] полиморфное поле: тот же discriminator, что в оригинале MAX; без oneOf проверялись бы только свойства базы
       oneOf:
         - $ref: '#/components/schemas/MaxBotApi.MessageCreatedUpdate'
         - $ref: '#/components/schemas/MaxBotApi.MessageCallbackUpdate'
