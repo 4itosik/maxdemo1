@@ -4,8 +4,15 @@
 package maxapi
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/oapi-codegen/runtime"
 )
@@ -5048,4 +5055,3341 @@ func (t Update) MarshalJSON() ([]byte, error) {
 func (t *Update) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
+}
+
+// RequestEditorFn is the function signature for the RequestEditor callback function
+type RequestEditorFn func(ctx context.Context, req *http.Request) error
+
+// Doer performs HTTP requests.
+//
+// The standard http.Client implements this interface.
+type HttpRequestDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Client which conforms to the OpenAPI3 specification for this service.
+type Client struct {
+	// The endpoint of the server conforming to this interface, with scheme,
+	// https://api.deepmap.com for example. This can contain a path relative
+	// to the server, such as https://api.deepmap.com/dev-test, and all the
+	// paths in the swagger spec will be appended to the server.
+	Server string
+
+	// Doer for performing requests, typically a *http.Client with any
+	// customized settings, such as certificate chains.
+	Client HttpRequestDoer
+
+	// A list of callbacks for modifying requests which are generated before sending over
+	// the network.
+	RequestEditors []RequestEditorFn
+}
+
+// ClientOption allows setting custom parameters during construction
+type ClientOption func(*Client) error
+
+// Creates a new Client, with reasonable defaults
+func NewClient(server string, opts ...ClientOption) (*Client, error) {
+	// create a client with sane default values
+	client := Client{
+		Server: server,
+	}
+	// mutate client and add all optional params
+	for _, o := range opts {
+		if err := o(&client); err != nil {
+			return nil, err
+		}
+	}
+	// ensure the server URL always has a trailing slash
+	if !strings.HasSuffix(client.Server, "/") {
+		client.Server += "/"
+	}
+	// create httpClient, if not already present
+	if client.Client == nil {
+		client.Client = &http.Client{}
+	}
+	return &client, nil
+}
+
+// WithHTTPClient allows overriding the default Doer, which is
+// automatically created using http.Client. This is useful for tests.
+func WithHTTPClient(doer HttpRequestDoer) ClientOption {
+	return func(c *Client) error {
+		c.Client = doer
+		return nil
+	}
+}
+
+// WithRequestEditorFn allows setting up a callback function, which will be
+// called right before sending the request. This can be used to mutate the request.
+func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
+	return func(c *Client) error {
+		c.RequestEditors = append(c.RequestEditors, fn)
+		return nil
+	}
+}
+
+// The interface specification for the client above.
+type ClientInterface interface {
+
+	// AnswerOnCallbackWithBody Ответ на callback
+	//
+	// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+	// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+	// диалог, групповой чат или канал
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+	AnswerOnCallbackWithBody(ctx context.Context, params *AnswerOnCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AnswerOnCallback Ответ на callback
+	//
+	// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+	// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+	// диалог, групповой чат или канал
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+	AnswerOnCallback(ctx context.Context, params *AnswerOnCallbackParams, body AnswerOnCallbackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMyInfo Получение информации о боте
+	//
+	// Возвращает информацию о боте, который идентифицируется с помощью токена доступа `access_token`
+	//
+	// Corresponds with GET /me (the `GetMyInfo` operationId).
+	GetMyInfo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EditMyCommandsWithBody Редактирование команд бота
+	//
+	// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+	EditMyCommandsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EditMyCommands Редактирование команд бота
+	//
+	// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+	EditMyCommands(ctx context.Context, body EditMyCommandsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteMessage Удалить сообщение
+	//
+	// Удаляет сообщения в диалоге, групповом чате или канале. Бот должен быть
+	// администратором и иметь право на удаление сообщений. В диалоге бот может
+	// удалять только собственные сообщения, в групповом чате и канале — любые.
+	// Не более двух удалений в секунду в одном диалоге, групповом чате или канале
+	//
+	// Corresponds with DELETE /messages (the `DeleteMessage` operationId).
+	DeleteMessage(ctx context.Context, params *DeleteMessageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMessages Получение сообщений
+	//
+	// Возвращает информацию о сообщении или массив сообщений из чата. Нужно
+	// указать один из параметров — `chat_id` или `message_ids`
+	//
+	// Corresponds with GET /messages (the `GetMessages` operationId).
+	GetMessages(ctx context.Context, params *GetMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendMessageWithBody Отправить сообщение
+	//
+	// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+	// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+	// при превышении лимита ставьте сообщения в очередь или делайте задержку
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /messages (the `SendMessage` operationId).
+	SendMessageWithBody(ctx context.Context, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendMessage Отправить сообщение
+	//
+	// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+	// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+	// при превышении лимита ставьте сообщения в очередь или делайте задержку
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /messages (the `SendMessage` operationId).
+	SendMessage(ctx context.Context, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EditMessageWithBody Редактировать сообщение
+	//
+	// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+	// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+	// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+	// каналах — независимо от срока давности. Не более двух редактирований в
+	// секунду в одном диалоге, групповом чате или канале
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /messages (the `EditMessage` operationId).
+	EditMessageWithBody(ctx context.Context, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EditMessage Редактировать сообщение
+	//
+	// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+	// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+	// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+	// каналах — независимо от срока давности. Не более двух редактирований в
+	// секунду в одном диалоге, групповом чате или канале
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /messages (the `EditMessage` operationId).
+	EditMessage(ctx context.Context, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMessageById Получить сообщение
+	//
+	// Возвращает сообщение по его ID.
+	//
+	// Corresponds with GET /messages/{messageId} (the `GetMessageById` operationId).
+	GetMessageById(ctx context.Context, messageId MessageId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// Unsubscribe Отписка от обновлений о новых событиях через Webhook
+	//
+	// Отписывает бота от получения обновлений о новых событиях через Webhook.
+	//
+	// Corresponds with DELETE /subscriptions (the `Unsubscribe` operationId).
+	Unsubscribe(ctx context.Context, params *UnsubscribeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSubscriptions Получение всех подписок через Webhook
+	//
+	// Если ваш бот получает данные через Webhook, этот метод возвращает список всех подписок
+	//
+	// Corresponds with GET /subscriptions (the `GetSubscriptions` operationId).
+	GetSubscriptions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubscribeWithBody Подписка на обновления о новых событиях через Webhook
+	//
+	// Настраивает доставку событий бота через Webhook.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+	SubscribeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// Subscribe Подписка на обновления о новых событиях через Webhook
+	//
+	// Настраивает доставку событий бота через Webhook.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+	Subscribe(ctx context.Context, body SubscribeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUpdates Получение обновлений о событиях через Long Polling
+	//
+	// Corresponds with GET /updates (the `GetUpdates` operationId).
+	GetUpdates(ctx context.Context, params *GetUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUploadUrl Загрузка медиафайлов
+	//
+	// Метод возвращает URL для загрузки медиафайла и токен для передачи
+	// загруженного файла во вложении к сообщению в чате или канале
+	//
+	// Corresponds with POST /uploads (the `GetUploadUrl` operationId).
+	GetUploadUrl(ctx context.Context, params *GetUploadUrlParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetVideoAttachmentDetails Получить информацию о видео
+	//
+	// Возвращает подробную информацию о прикреплённом видео, URL-адреса воспроизведения и дополнительные метаданные
+	//
+	// Corresponds with GET /videos/{videoToken} (the `GetVideoAttachmentDetails` operationId).
+	GetVideoAttachmentDetails(ctx context.Context, videoToken string, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// AnswerOnCallbackWithBody Ответ на callback
+//
+// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+// диалог, групповой чат или канал
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+func (c *Client) AnswerOnCallbackWithBody(ctx context.Context, params *AnswerOnCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAnswerOnCallbackRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AnswerOnCallback Ответ на callback
+//
+// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+// диалог, групповой чат или канал
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+func (c *Client) AnswerOnCallback(ctx context.Context, params *AnswerOnCallbackParams, body AnswerOnCallbackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAnswerOnCallbackRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMyInfo Получение информации о боте
+//
+// Возвращает информацию о боте, который идентифицируется с помощью токена доступа `access_token`
+//
+// Corresponds with GET /me (the `GetMyInfo` operationId).
+func (c *Client) GetMyInfo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMyInfoRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EditMyCommandsWithBody Редактирование команд бота
+//
+// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+func (c *Client) EditMyCommandsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEditMyCommandsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EditMyCommands Редактирование команд бота
+//
+// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+func (c *Client) EditMyCommands(ctx context.Context, body EditMyCommandsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEditMyCommandsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteMessage Удалить сообщение
+//
+// Удаляет сообщения в диалоге, групповом чате или канале. Бот должен быть
+// администратором и иметь право на удаление сообщений. В диалоге бот может
+// удалять только собственные сообщения, в групповом чате и канале — любые.
+// Не более двух удалений в секунду в одном диалоге, групповом чате или канале
+//
+// Corresponds with DELETE /messages (the `DeleteMessage` operationId).
+func (c *Client) DeleteMessage(ctx context.Context, params *DeleteMessageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMessageRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMessages Получение сообщений
+//
+// Возвращает информацию о сообщении или массив сообщений из чата. Нужно
+// указать один из параметров — `chat_id` или `message_ids`
+//
+// Corresponds with GET /messages (the `GetMessages` operationId).
+func (c *Client) GetMessages(ctx context.Context, params *GetMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessagesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendMessageWithBody Отправить сообщение
+//
+// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+// при превышении лимита ставьте сообщения в очередь или делайте задержку
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /messages (the `SendMessage` operationId).
+func (c *Client) SendMessageWithBody(ctx context.Context, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendMessageRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendMessage Отправить сообщение
+//
+// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+// при превышении лимита ставьте сообщения в очередь или делайте задержку
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /messages (the `SendMessage` operationId).
+func (c *Client) SendMessage(ctx context.Context, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendMessageRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EditMessageWithBody Редактировать сообщение
+//
+// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+// каналах — независимо от срока давности. Не более двух редактирований в
+// секунду в одном диалоге, групповом чате или канале
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /messages (the `EditMessage` operationId).
+func (c *Client) EditMessageWithBody(ctx context.Context, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEditMessageRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EditMessage Редактировать сообщение
+//
+// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+// каналах — независимо от срока давности. Не более двух редактирований в
+// секунду в одном диалоге, групповом чате или канале
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /messages (the `EditMessage` operationId).
+func (c *Client) EditMessage(ctx context.Context, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEditMessageRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMessageById Получить сообщение
+//
+// Возвращает сообщение по его ID.
+//
+// Corresponds with GET /messages/{messageId} (the `GetMessageById` operationId).
+func (c *Client) GetMessageById(ctx context.Context, messageId MessageId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessageByIdRequest(c.Server, messageId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// Unsubscribe Отписка от обновлений о новых событиях через Webhook
+//
+// Отписывает бота от получения обновлений о новых событиях через Webhook.
+//
+// Corresponds with DELETE /subscriptions (the `Unsubscribe` operationId).
+func (c *Client) Unsubscribe(ctx context.Context, params *UnsubscribeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnsubscribeRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetSubscriptions Получение всех подписок через Webhook
+//
+// # Если ваш бот получает данные через Webhook, этот метод возвращает список всех подписок
+//
+// Corresponds with GET /subscriptions (the `GetSubscriptions` operationId).
+func (c *Client) GetSubscriptions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSubscriptionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SubscribeWithBody Подписка на обновления о новых событиях через Webhook
+//
+// Настраивает доставку событий бота через Webhook.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+func (c *Client) SubscribeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubscribeRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// Subscribe Подписка на обновления о новых событиях через Webhook
+//
+// Настраивает доставку событий бота через Webhook.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+func (c *Client) Subscribe(ctx context.Context, body SubscribeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubscribeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUpdates Получение обновлений о событиях через Long Polling
+//
+// Corresponds with GET /updates (the `GetUpdates` operationId).
+func (c *Client) GetUpdates(ctx context.Context, params *GetUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUpdatesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUploadUrl Загрузка медиафайлов
+//
+// Метод возвращает URL для загрузки медиафайла и токен для передачи
+// загруженного файла во вложении к сообщению в чате или канале
+//
+// Corresponds with POST /uploads (the `GetUploadUrl` operationId).
+func (c *Client) GetUploadUrl(ctx context.Context, params *GetUploadUrlParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUploadUrlRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetVideoAttachmentDetails Получить информацию о видео
+//
+// # Возвращает подробную информацию о прикреплённом видео, URL-адреса воспроизведения и дополнительные метаданные
+//
+// Corresponds with GET /videos/{videoToken} (the `GetVideoAttachmentDetails` operationId).
+func (c *Client) GetVideoAttachmentDetails(ctx context.Context, videoToken string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVideoAttachmentDetailsRequest(c.Server, videoToken)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewAnswerOnCallbackRequest calls the generic AnswerOnCallback builder with application/json body
+func NewAnswerOnCallbackRequest(server string, params *AnswerOnCallbackParams, body AnswerOnCallbackJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAnswerOnCallbackRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewAnswerOnCallbackRequestWithBody constructs an http.Request for the AnswerOnCallback method, with any body, and a specified content type
+func NewAnswerOnCallbackRequestWithBody(server string, params *AnswerOnCallbackParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/answers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "callback_id", params.CallbackId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetMyInfoRequest constructs an http.Request for the GetMyInfo method
+func NewGetMyInfoRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/me")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewEditMyCommandsRequest calls the generic EditMyCommands builder with application/json body
+func NewEditMyCommandsRequest(server string, body EditMyCommandsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewEditMyCommandsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewEditMyCommandsRequestWithBody constructs an http.Request for the EditMyCommands method, with any body, and a specified content type
+func NewEditMyCommandsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/me/commands")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteMessageRequest constructs an http.Request for the DeleteMessage method
+func NewDeleteMessageRequest(server string, params *DeleteMessageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/messages")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "message_id", params.MessageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMessagesRequest constructs an http.Request for the GetMessages method
+func NewGetMessagesRequest(server string, params *GetMessagesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/messages")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.ChatId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "chat_id", *params.ChatId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MessageIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "message_ids", *params.MessageIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.From != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "from", *params.From, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.To != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "to", *params.To, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Count != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "count", *params.Count, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSendMessageRequest calls the generic SendMessage builder with application/json body
+func NewSendMessageRequest(server string, params *SendMessageParams, body SendMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSendMessageRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewSendMessageRequestWithBody constructs an http.Request for the SendMessage method, with any body, and a specified content type
+func NewSendMessageRequestWithBody(server string, params *SendMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/messages")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.UserId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "user_id", *params.UserId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ChatId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "chat_id", *params.ChatId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.DisableLinkPreview != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "disable_link_preview", *params.DisableLinkPreview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewEditMessageRequest calls the generic EditMessage builder with application/json body
+func NewEditMessageRequest(server string, params *EditMessageParams, body EditMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewEditMessageRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewEditMessageRequestWithBody constructs an http.Request for the EditMessage method, with any body, and a specified content type
+func NewEditMessageRequestWithBody(server string, params *EditMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/messages")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "message_id", params.MessageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetMessageByIdRequest constructs an http.Request for the GetMessageById method
+func NewGetMessageByIdRequest(server string, messageId MessageId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/messages/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnsubscribeRequest constructs an http.Request for the Unsubscribe method
+func NewUnsubscribeRequest(server string, params *UnsubscribeParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "url", params.Url, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSubscriptionsRequest constructs an http.Request for the GetSubscriptions method
+func NewGetSubscriptionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSubscribeRequest calls the generic Subscribe builder with application/json body
+func NewSubscribeRequest(server string, body SubscribeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSubscribeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSubscribeRequestWithBody constructs an http.Request for the Subscribe method, with any body, and a specified content type
+func NewSubscribeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetUpdatesRequest constructs an http.Request for the GetUpdates method
+func NewGetUpdatesRequest(server string, params *GetUpdatesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/updates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Timeout != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "timeout", *params.Timeout, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Marker != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "marker", *params.Marker, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Types != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "types", *params.Types, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetUploadUrlRequest constructs an http.Request for the GetUploadUrl method
+func NewGetUploadUrlRequest(server string, params *GetUploadUrlParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/uploads")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "type", params.Type, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetVideoAttachmentDetailsRequest constructs an http.Request for the GetVideoAttachmentDetails method
+func NewGetVideoAttachmentDetailsRequest(server string, videoToken string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "videoToken", videoToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/videos/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
+	for _, r := range c.RequestEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	for _, r := range additionalEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ClientWithResponses builds on ClientInterface to offer response payloads
+type ClientWithResponses struct {
+	ClientInterface
+}
+
+// NewClientWithResponses creates a new ClientWithResponses, which wraps
+// Client with return type handling
+func NewClientWithResponses(server string, opts ...ClientOption) (*ClientWithResponses, error) {
+	client, err := NewClient(server, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &ClientWithResponses{client}, nil
+}
+
+// WithBaseURL overrides the baseURL.
+func WithBaseURL(baseURL string) ClientOption {
+	return func(c *Client) error {
+		newBaseURL, err := url.Parse(baseURL)
+		if err != nil {
+			return err
+		}
+		c.Server = newBaseURL.String()
+		return nil
+	}
+}
+
+// ClientWithResponsesInterface is the interface specification for the client with responses above.
+type ClientWithResponsesInterface interface {
+
+	// AnswerOnCallbackWithBodyWithResponse Ответ на callback
+	//
+	// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+	// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+	// диалог, групповой чат или канал
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+	AnswerOnCallbackWithBodyWithResponse(ctx context.Context, params *AnswerOnCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AnswerOnCallbackResponse, error)
+
+	// AnswerOnCallbackWithResponse Ответ на callback
+	//
+	// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+	// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+	// диалог, групповой чат или канал
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+	AnswerOnCallbackWithResponse(ctx context.Context, params *AnswerOnCallbackParams, body AnswerOnCallbackJSONRequestBody, reqEditors ...RequestEditorFn) (*AnswerOnCallbackResponse, error)
+
+	// GetMyInfoWithResponse Получение информации о боте
+	//
+	// Возвращает информацию о боте, который идентифицируется с помощью токена доступа `access_token`
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /me (the `GetMyInfo` operationId).
+	GetMyInfoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMyInfoResponse, error)
+
+	// EditMyCommandsWithBodyWithResponse Редактирование команд бота
+	//
+	// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+	EditMyCommandsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EditMyCommandsResponse, error)
+
+	// EditMyCommandsWithResponse Редактирование команд бота
+	//
+	// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+	EditMyCommandsWithResponse(ctx context.Context, body EditMyCommandsJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMyCommandsResponse, error)
+
+	// DeleteMessageWithResponse Удалить сообщение
+	//
+	// Удаляет сообщения в диалоге, групповом чате или канале. Бот должен быть
+	// администратором и иметь право на удаление сообщений. В диалоге бот может
+	// удалять только собственные сообщения, в групповом чате и канале — любые.
+	// Не более двух удалений в секунду в одном диалоге, групповом чате или канале
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /messages (the `DeleteMessage` operationId).
+	DeleteMessageWithResponse(ctx context.Context, params *DeleteMessageParams, reqEditors ...RequestEditorFn) (*DeleteMessageResponse, error)
+
+	// GetMessagesWithResponse Получение сообщений
+	//
+	// Возвращает информацию о сообщении или массив сообщений из чата. Нужно
+	// указать один из параметров — `chat_id` или `message_ids`
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /messages (the `GetMessages` operationId).
+	GetMessagesWithResponse(ctx context.Context, params *GetMessagesParams, reqEditors ...RequestEditorFn) (*GetMessagesResponse, error)
+
+	// SendMessageWithBodyWithResponse Отправить сообщение
+	//
+	// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+	// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+	// при превышении лимита ставьте сообщения в очередь или делайте задержку
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /messages (the `SendMessage` operationId).
+	SendMessageWithBodyWithResponse(ctx context.Context, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
+
+	// SendMessageWithResponse Отправить сообщение
+	//
+	// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+	// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+	// при превышении лимита ставьте сообщения в очередь или делайте задержку
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /messages (the `SendMessage` operationId).
+	SendMessageWithResponse(ctx context.Context, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
+
+	// EditMessageWithBodyWithResponse Редактировать сообщение
+	//
+	// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+	// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+	// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+	// каналах — независимо от срока давности. Не более двух редактирований в
+	// секунду в одном диалоге, групповом чате или канале
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /messages (the `EditMessage` operationId).
+	EditMessageWithBodyWithResponse(ctx context.Context, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EditMessageResponse, error)
+
+	// EditMessageWithResponse Редактировать сообщение
+	//
+	// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+	// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+	// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+	// каналах — независимо от срока давности. Не более двух редактирований в
+	// секунду в одном диалоге, групповом чате или канале
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /messages (the `EditMessage` operationId).
+	EditMessageWithResponse(ctx context.Context, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMessageResponse, error)
+
+	// GetMessageByIdWithResponse Получить сообщение
+	//
+	// Возвращает сообщение по его ID.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /messages/{messageId} (the `GetMessageById` operationId).
+	GetMessageByIdWithResponse(ctx context.Context, messageId MessageId, reqEditors ...RequestEditorFn) (*GetMessageByIdResponse, error)
+
+	// UnsubscribeWithResponse Отписка от обновлений о новых событиях через Webhook
+	//
+	// Отписывает бота от получения обновлений о новых событиях через Webhook.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /subscriptions (the `Unsubscribe` operationId).
+	UnsubscribeWithResponse(ctx context.Context, params *UnsubscribeParams, reqEditors ...RequestEditorFn) (*UnsubscribeResponse, error)
+
+	// GetSubscriptionsWithResponse Получение всех подписок через Webhook
+	//
+	// Если ваш бот получает данные через Webhook, этот метод возвращает список всех подписок
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /subscriptions (the `GetSubscriptions` operationId).
+	GetSubscriptionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error)
+
+	// SubscribeWithBodyWithResponse Подписка на обновления о новых событиях через Webhook
+	//
+	// Настраивает доставку событий бота через Webhook.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+	SubscribeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubscribeResponse, error)
+
+	// SubscribeWithResponse Подписка на обновления о новых событиях через Webhook
+	//
+	// Настраивает доставку событий бота через Webhook.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+	SubscribeWithResponse(ctx context.Context, body SubscribeJSONRequestBody, reqEditors ...RequestEditorFn) (*SubscribeResponse, error)
+
+	// GetUpdatesWithResponse Получение обновлений о событиях через Long Polling
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /updates (the `GetUpdates` operationId).
+	GetUpdatesWithResponse(ctx context.Context, params *GetUpdatesParams, reqEditors ...RequestEditorFn) (*GetUpdatesResponse, error)
+
+	// GetUploadUrlWithResponse Загрузка медиафайлов
+	//
+	// Метод возвращает URL для загрузки медиафайла и токен для передачи
+	// загруженного файла во вложении к сообщению в чате или канале
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /uploads (the `GetUploadUrl` operationId).
+	GetUploadUrlWithResponse(ctx context.Context, params *GetUploadUrlParams, reqEditors ...RequestEditorFn) (*GetUploadUrlResponse, error)
+
+	// GetVideoAttachmentDetailsWithResponse Получить информацию о видео
+	//
+	// Возвращает подробную информацию о прикреплённом видео, URL-адреса воспроизведения и дополнительные метаданные
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /videos/{videoToken} (the `GetVideoAttachmentDetails` operationId).
+	GetVideoAttachmentDetailsWithResponse(ctx context.Context, videoToken string, reqEditors ...RequestEditorFn) (*GetVideoAttachmentDetailsResponse, error)
+}
+
+type AnswerOnCallbackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SimpleQueryResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON405 the response for an HTTP 405 `application/json` response
+	JSON405 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AnswerOnCallbackResponse) GetJSON200() *SimpleQueryResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r AnswerOnCallbackResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON405 returns the response for an HTTP 405 `application/json` response
+func (r AnswerOnCallbackResponse) GetJSON405() *Error {
+	return r.JSON405
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r AnswerOnCallbackResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r AnswerOnCallbackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AnswerOnCallbackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AnswerOnCallbackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AnswerOnCallbackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMyInfoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BotInfo
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMyInfoResponse) GetJSON200() *BotInfo {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetMyInfoResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetMyInfoResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMyInfoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMyInfoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMyInfoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMyInfoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type EditMyCommandsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BotCommandsInfo
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r EditMyCommandsResponse) GetJSON200() *BotCommandsInfo {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r EditMyCommandsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r EditMyCommandsResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r EditMyCommandsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r EditMyCommandsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r EditMyCommandsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r EditMyCommandsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SimpleQueryResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteMessageResponse) GetJSON200() *SimpleQueryResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteMessageResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteMessageResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteMessageResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMessagesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageList
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessagesResponse) GetJSON200() *MessageList {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetMessagesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetMessagesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetMessagesResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessagesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessagesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessagesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessagesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SendMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SendMessageResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SendMessageResponse) GetJSON200() *SendMessageResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r SendMessageResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r SendMessageResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SendMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SendMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SendMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SendMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type EditMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SimpleQueryResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r EditMessageResponse) GetJSON200() *SimpleQueryResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r EditMessageResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r EditMessageResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r EditMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r EditMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r EditMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r EditMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMessageByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Message
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessageByIdResponse) GetJSON200() *Message {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetMessageByIdResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetMessageByIdResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetMessageByIdResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessageByIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessageByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessageByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessageByIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UnsubscribeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SimpleQueryResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UnsubscribeResponse) GetJSON200() *SimpleQueryResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r UnsubscribeResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r UnsubscribeResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UnsubscribeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnsubscribeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnsubscribeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnsubscribeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetSubscriptionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GetSubscriptionsResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetSubscriptionsResponse) GetJSON200() *GetSubscriptionsResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetSubscriptionsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetSubscriptionsResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetSubscriptionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSubscriptionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSubscriptionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetSubscriptionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SubscribeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SimpleQueryResult
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SubscribeResponse) GetJSON200() *SimpleQueryResult {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r SubscribeResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r SubscribeResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SubscribeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SubscribeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SubscribeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SubscribeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UpdateList
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON405 the response for an HTTP 405 `application/json` response
+	JSON405 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUpdatesResponse) GetJSON200() *UpdateList {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUpdatesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON405 returns the response for an HTTP 405 `application/json` response
+func (r GetUpdatesResponse) GetJSON405() *Error {
+	return r.JSON405
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUpdatesResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUpdatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUpdatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetUploadUrlResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UploadEndpoint
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUploadUrlResponse) GetJSON200() *UploadEndpoint {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUploadUrlResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUploadUrlResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUploadUrlResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUploadUrlResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUploadUrlResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUploadUrlResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetVideoAttachmentDetailsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *VideoAttachmentDetails
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVideoAttachmentDetailsResponse) GetJSON200() *VideoAttachmentDetails {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetVideoAttachmentDetailsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetVideoAttachmentDetailsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetVideoAttachmentDetailsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetVideoAttachmentDetailsResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVideoAttachmentDetailsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVideoAttachmentDetailsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVideoAttachmentDetailsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVideoAttachmentDetailsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// AnswerOnCallbackWithBodyWithResponse Ответ на callback
+//
+// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+// диалог, групповой чат или канал
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+func (c *ClientWithResponses) AnswerOnCallbackWithBodyWithResponse(ctx context.Context, params *AnswerOnCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AnswerOnCallbackResponse, error) {
+	rsp, err := c.AnswerOnCallbackWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAnswerOnCallbackResponse(rsp)
+}
+
+// AnswerOnCallbackWithResponse Ответ на callback
+//
+// Отправка ответа после того, как пользователь нажал на кнопку. Ответом
+// может быть обновлённое сообщение. Не более двух ответов в секунду в один
+// диалог, групповой чат или канал
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /answers (the `AnswerOnCallback` operationId).
+func (c *ClientWithResponses) AnswerOnCallbackWithResponse(ctx context.Context, params *AnswerOnCallbackParams, body AnswerOnCallbackJSONRequestBody, reqEditors ...RequestEditorFn) (*AnswerOnCallbackResponse, error) {
+	rsp, err := c.AnswerOnCallback(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAnswerOnCallbackResponse(rsp)
+}
+
+// GetMyInfoWithResponse Получение информации о боте
+//
+// Возвращает информацию о боте, который идентифицируется с помощью токена доступа `access_token`
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /me (the `GetMyInfo` operationId).
+func (c *ClientWithResponses) GetMyInfoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMyInfoResponse, error) {
+	rsp, err := c.GetMyInfo(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMyInfoResponse(rsp)
+}
+
+// EditMyCommandsWithBodyWithResponse Редактирование команд бота
+//
+// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+func (c *ClientWithResponses) EditMyCommandsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EditMyCommandsResponse, error) {
+	rsp, err := c.EditMyCommandsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEditMyCommandsResponse(rsp)
+}
+
+// EditMyCommandsWithResponse Редактирование команд бота
+//
+// Добавляет, изменяет или удаляет команды бота. Для удаления команд передайте пустой массив `commands`
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /me/commands (the `EditMyCommands` operationId).
+func (c *ClientWithResponses) EditMyCommandsWithResponse(ctx context.Context, body EditMyCommandsJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMyCommandsResponse, error) {
+	rsp, err := c.EditMyCommands(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEditMyCommandsResponse(rsp)
+}
+
+// DeleteMessageWithResponse Удалить сообщение
+//
+// Удаляет сообщения в диалоге, групповом чате или канале. Бот должен быть
+// администратором и иметь право на удаление сообщений. В диалоге бот может
+// удалять только собственные сообщения, в групповом чате и канале — любые.
+// Не более двух удалений в секунду в одном диалоге, групповом чате или канале
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /messages (the `DeleteMessage` operationId).
+func (c *ClientWithResponses) DeleteMessageWithResponse(ctx context.Context, params *DeleteMessageParams, reqEditors ...RequestEditorFn) (*DeleteMessageResponse, error) {
+	rsp, err := c.DeleteMessage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteMessageResponse(rsp)
+}
+
+// GetMessagesWithResponse Получение сообщений
+//
+// Возвращает информацию о сообщении или массив сообщений из чата. Нужно
+// указать один из параметров — `chat_id` или `message_ids`
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /messages (the `GetMessages` operationId).
+func (c *ClientWithResponses) GetMessagesWithResponse(ctx context.Context, params *GetMessagesParams, reqEditors ...RequestEditorFn) (*GetMessagesResponse, error) {
+	rsp, err := c.GetMessages(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessagesResponse(rsp)
+}
+
+// SendMessageWithBodyWithResponse Отправить сообщение
+//
+// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+// при превышении лимита ставьте сообщения в очередь или делайте задержку
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /messages (the `SendMessage` operationId).
+func (c *ClientWithResponses) SendMessageWithBodyWithResponse(ctx context.Context, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendMessageResponse, error) {
+	rsp, err := c.SendMessageWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendMessageResponse(rsp)
+}
+
+// SendMessageWithResponse Отправить сообщение
+//
+// Отправляет сообщение в диалог, групповой чат или канал. Можно отправлять
+// не более двух сообщений в секунду в один диалог, групповой чат или канал —
+// при превышении лимита ставьте сообщения в очередь или делайте задержку
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /messages (the `SendMessage` operationId).
+func (c *ClientWithResponses) SendMessageWithResponse(ctx context.Context, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SendMessageResponse, error) {
+	rsp, err := c.SendMessage(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendMessageResponse(rsp)
+}
+
+// EditMessageWithBodyWithResponse Редактировать сообщение
+//
+// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+// каналах — независимо от срока давности. Не более двух редактирований в
+// секунду в одном диалоге, групповом чате или канале
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /messages (the `EditMessage` operationId).
+func (c *ClientWithResponses) EditMessageWithBodyWithResponse(ctx context.Context, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EditMessageResponse, error) {
+	rsp, err := c.EditMessageWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEditMessageResponse(rsp)
+}
+
+// EditMessageWithResponse Редактировать сообщение
+//
+// Редактирует сообщения, отправленные ботом. В диалогах с ботом сообщения
+// с кнопками `inline_keyboard` редактируются независимо от срока давности,
+// остальные — если отправлены менее 7 суток назад; в групповых чатах и
+// каналах — независимо от срока давности. Не более двух редактирований в
+// секунду в одном диалоге, групповом чате или канале
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /messages (the `EditMessage` operationId).
+func (c *ClientWithResponses) EditMessageWithResponse(ctx context.Context, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMessageResponse, error) {
+	rsp, err := c.EditMessage(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEditMessageResponse(rsp)
+}
+
+// GetMessageByIdWithResponse Получить сообщение
+//
+// Возвращает сообщение по его ID.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /messages/{messageId} (the `GetMessageById` operationId).
+func (c *ClientWithResponses) GetMessageByIdWithResponse(ctx context.Context, messageId MessageId, reqEditors ...RequestEditorFn) (*GetMessageByIdResponse, error) {
+	rsp, err := c.GetMessageById(ctx, messageId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessageByIdResponse(rsp)
+}
+
+// UnsubscribeWithResponse Отписка от обновлений о новых событиях через Webhook
+//
+// Отписывает бота от получения обновлений о новых событиях через Webhook.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /subscriptions (the `Unsubscribe` operationId).
+func (c *ClientWithResponses) UnsubscribeWithResponse(ctx context.Context, params *UnsubscribeParams, reqEditors ...RequestEditorFn) (*UnsubscribeResponse, error) {
+	rsp, err := c.Unsubscribe(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnsubscribeResponse(rsp)
+}
+
+// GetSubscriptionsWithResponse Получение всех подписок через Webhook
+//
+// # Если ваш бот получает данные через Webhook, этот метод возвращает список всех подписок
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /subscriptions (the `GetSubscriptions` operationId).
+func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error) {
+	rsp, err := c.GetSubscriptions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSubscriptionsResponse(rsp)
+}
+
+// SubscribeWithBodyWithResponse Подписка на обновления о новых событиях через Webhook
+//
+// Настраивает доставку событий бота через Webhook.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+func (c *ClientWithResponses) SubscribeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubscribeResponse, error) {
+	rsp, err := c.SubscribeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubscribeResponse(rsp)
+}
+
+// SubscribeWithResponse Подписка на обновления о новых событиях через Webhook
+//
+// Настраивает доставку событий бота через Webhook.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /subscriptions (the `Subscribe` operationId).
+func (c *ClientWithResponses) SubscribeWithResponse(ctx context.Context, body SubscribeJSONRequestBody, reqEditors ...RequestEditorFn) (*SubscribeResponse, error) {
+	rsp, err := c.Subscribe(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubscribeResponse(rsp)
+}
+
+// GetUpdatesWithResponse Получение обновлений о событиях через Long Polling
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /updates (the `GetUpdates` operationId).
+func (c *ClientWithResponses) GetUpdatesWithResponse(ctx context.Context, params *GetUpdatesParams, reqEditors ...RequestEditorFn) (*GetUpdatesResponse, error) {
+	rsp, err := c.GetUpdates(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUpdatesResponse(rsp)
+}
+
+// GetUploadUrlWithResponse Загрузка медиафайлов
+//
+// Метод возвращает URL для загрузки медиафайла и токен для передачи
+// загруженного файла во вложении к сообщению в чате или канале
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /uploads (the `GetUploadUrl` operationId).
+func (c *ClientWithResponses) GetUploadUrlWithResponse(ctx context.Context, params *GetUploadUrlParams, reqEditors ...RequestEditorFn) (*GetUploadUrlResponse, error) {
+	rsp, err := c.GetUploadUrl(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUploadUrlResponse(rsp)
+}
+
+// GetVideoAttachmentDetailsWithResponse Получить информацию о видео
+//
+// # Возвращает подробную информацию о прикреплённом видео, URL-адреса воспроизведения и дополнительные метаданные
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /videos/{videoToken} (the `GetVideoAttachmentDetails` operationId).
+func (c *ClientWithResponses) GetVideoAttachmentDetailsWithResponse(ctx context.Context, videoToken string, reqEditors ...RequestEditorFn) (*GetVideoAttachmentDetailsResponse, error) {
+	rsp, err := c.GetVideoAttachmentDetails(ctx, videoToken, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVideoAttachmentDetailsResponse(rsp)
+}
+
+// ParseAnswerOnCallbackResponse parses an HTTP response from a AnswerOnCallbackWithResponse call
+func ParseAnswerOnCallbackResponse(rsp *http.Response) (*AnswerOnCallbackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AnswerOnCallbackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SimpleQueryResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMyInfoResponse parses an HTTP response from a GetMyInfoWithResponse call
+func ParseGetMyInfoResponse(rsp *http.Response) (*GetMyInfoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMyInfoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BotInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseEditMyCommandsResponse parses an HTTP response from a EditMyCommandsWithResponse call
+func ParseEditMyCommandsResponse(rsp *http.Response) (*EditMyCommandsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &EditMyCommandsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BotCommandsInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteMessageResponse parses an HTTP response from a DeleteMessageWithResponse call
+func ParseDeleteMessageResponse(rsp *http.Response) (*DeleteMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SimpleQueryResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMessagesResponse parses an HTTP response from a GetMessagesWithResponse call
+func ParseGetMessagesResponse(rsp *http.Response) (*GetMessagesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessagesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSendMessageResponse parses an HTTP response from a SendMessageWithResponse call
+func ParseSendMessageResponse(rsp *http.Response) (*SendMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SendMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SendMessageResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseEditMessageResponse parses an HTTP response from a EditMessageWithResponse call
+func ParseEditMessageResponse(rsp *http.Response) (*EditMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &EditMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SimpleQueryResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMessageByIdResponse parses an HTTP response from a GetMessageByIdWithResponse call
+func ParseGetMessageByIdResponse(rsp *http.Response) (*GetMessageByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessageByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Message
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnsubscribeResponse parses an HTTP response from a UnsubscribeWithResponse call
+func ParseUnsubscribeResponse(rsp *http.Response) (*UnsubscribeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnsubscribeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SimpleQueryResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSubscriptionsResponse parses an HTTP response from a GetSubscriptionsWithResponse call
+func ParseGetSubscriptionsResponse(rsp *http.Response) (*GetSubscriptionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSubscriptionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GetSubscriptionsResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSubscribeResponse parses an HTTP response from a SubscribeWithResponse call
+func ParseSubscribeResponse(rsp *http.Response) (*SubscribeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SubscribeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SimpleQueryResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUpdatesResponse parses an HTTP response from a GetUpdatesWithResponse call
+func ParseGetUpdatesResponse(rsp *http.Response) (*GetUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UpdateList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUploadUrlResponse parses an HTTP response from a GetUploadUrlWithResponse call
+func ParseGetUploadUrlResponse(rsp *http.Response) (*GetUploadUrlResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUploadUrlResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UploadEndpoint
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetVideoAttachmentDetailsResponse parses an HTTP response from a GetVideoAttachmentDetailsWithResponse call
+func ParseGetVideoAttachmentDetailsResponse(rsp *http.Response) (*GetVideoAttachmentDetailsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVideoAttachmentDetailsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest VideoAttachmentDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
 }

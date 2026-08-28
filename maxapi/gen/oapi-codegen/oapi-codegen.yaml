@@ -20,4 +20,5 @@ output: gen/oapi-codegen/models.go
 # поле-дискриминатор.
 generate:
   models: true
+  client: true
 

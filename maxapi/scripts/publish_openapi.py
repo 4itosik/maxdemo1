@@ -16,9 +16,8 @@ maxbotdemo/maxmoc.
 
 Копия, а не переезд output-dir: все прочие scripts/*.py работают по
 tsp-output/, и смена пути затронула бы весь конвейер ради косметики. Копируем
-байты, а не yaml.safe_load/dump — в начале каждого документа лежит объёмный
-комментарий КБ[125] про оставшиеся oneOf/allOf, а round-trip через yaml его
-молча съест.
+байты, а не yaml.safe_load/dump — в начале каждого документа лежит комментарий
+про оставшиеся oneOf/allOf, а round-trip через yaml его молча съест.
 """
 import shutil
 import sys

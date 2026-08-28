@@ -12,8 +12,8 @@ anyOf, allOf совместно с другими ключами, т.к. ком�
 
 Читающий YAML этого README перед глазами не имеет. Скрипт ставит рядом с
 каждой оставшейся позицией однострочный комментарий с буквой случая и
-причиной, а в начало файла — блок с полным разбором и подсчётом позиций по
-случаям. Пять случаев:
+причиной, а в начало файла — краткую сводку по случаям с подсчётом позиций.
+Пять случаев:
 
   [A] oneOf + discriminator + description — базы полиморфных полей;
   [B] allOf вокруг одиночного $ref + description — ссылка с описанием;
@@ -22,7 +22,7 @@ anyOf, allOf совместно с другими ключами, т.к. ком�
   [E] anyOf без соседних ключей — тело вебхука.
 
 Главный аргумент по каждому случаю — что так же сделано в самом контракте
-MAX, поэтому у каждого случая печатается пометка «В ОРИГИНАЛЕ» с конкретными
+MAX, поэтому у каждого случая печатается пометка «в оригинале» с конкретными
 схемами. Цифры и перечень схем для неё берутся из
 `reference/max-openapi-official.json`, а не вписаны в текст: если снимок
 оригинала обновят, комментарии не разойдутся с ним молча. Без референса
@@ -44,6 +44,7 @@ MAX, поэтому у каждого случая печатается поме
 import json
 import re
 import sys
+import textwrap
 from collections import Counter
 from pathlib import Path
 
@@ -62,9 +63,14 @@ NS_PREFIX = "MaxBotApi."
 COMPOSITE_KEYS = ("oneOf", "anyOf", "allOf")
 
 # Маркеры собственных строк — по ним же они удаляются при повторном прогоне.
-SITE_PREFIX = "# КБ[125]"
-HEADER_OPEN = "# --- КБ[125]: почему в документе остались oneOf/allOf/anyOf ---"
-HEADER_CLOSE = "# --- конец КБ[125] ---"
+# LEGACY_* — маркеры прежней редакции комментариев; нужны только затем, чтобы
+# файл, размеченный старым скриптом, тоже вычищался начисто.
+SITE_PREFIX = "# композит"
+HEADER_OPEN = "# --- oneOf/allOf/anyOf в этом документе: что осталось и почему ---"
+HEADER_CLOSE = "# --- конец ---"
+LEGACY_SITE_PREFIX = "# КБ[125]"
+LEGACY_HEADER_OPEN = "# --- КБ[125]: почему в документе остались oneOf/allOf/anyOf ---"
+LEGACY_HEADER_CLOSE = "# --- конец КБ[125] ---"
 
 # Однострочные пояснения у самих позиций.
 SITE_NOTE = {
@@ -95,115 +101,63 @@ INHERITANCE_NOTE = {
 
 CASE_TEXT = {
     "A": [
-        "[A] oneOf + discriminator + description — {n} поз.",
-        "    Базы полиморфных полей: updates[], attachments[], markup[], ряды кнопок,",
-        "    тело вебхука. Это каноническая для OpenAPI запись дискриминированного",
-        "    union'а; соседние ключи — часть той же конструкции (discriminator) и",
-        "    требование КБ (description). Прежняя форма — база-объект со свойствами",
-        "    плюс наследники через allOf — валидаторами тела не проверяется: у",
-        "    полиморфного поля контролируются только свойства базы, у",
-        "    AttachmentRequest это один type. Замер на kin-openapi: из 13 заведомо",
-        "    некорректных тел (широта 991, вложение несуществующего типа, событие с",
-        "    лишним полем, кнопка без обязательного text) прежняя форма принимала 11,",
-        "    нынешняя — ни одного. Каждый вариант объявлен целиком, поэтому",
-        "    «игнорирование композитной части» при генерации ничего не теряет.",
-        "    В ОРИГИНАЛЕ: те же шесть дискриминаторов с теми же значениями mapping —",
-        "    Attachment, AttachmentRequest, Button, ReplyButton, MarkupElement, Update.",
-        "    Полиморфизм здесь не наш выбор, он в предметной области; отличается только",
-        "    запись. У MAX база — объект со свойством type и discriminator, а варианты",
-        "    ссылаются на неё через allOf:",
-        "        Attachment:       {{discriminator: {{propertyName: type, mapping: {{...9}}}},",
-        "                           properties: {{type: {{type: string}}}}, required: [type]}}",
-        "        PhotoAttachment:  {{allOf: [{{$ref: Attachment}}, {{properties: {{payload}},",
-        "                           required: [payload]}}]}}",
-        "    Сайт при этом показывает варианты уже развёрнутыми: на странице",
-        "    dev.max.ru/docs-api/objects/Update перечислены все типы событий, а",
-        "    update_type прямо назван полем, которое их различает.",
+        "[A] oneOf + discriminator + description — {n} поз. Базы полиморфных полей: updates[],",
+        "    attachments[], markup[], ряды кнопок, тело вебхука; discriminator и description —",
+        "    часть той же конструкции. В оригинале те же шесть дискриминаторов, но варианты",
+        "    подключены к базе через allOf: при такой записи у полиморфного поля проверяются",
+        "    только свойства базы — из 13 некорректных тел kin-openapi пропускал 11, теперь ноль.",
     ],
     "B": [
-        "[B] allOf вокруг одиночного $ref + description — {n} поз.",
-        "    В OpenAPI 3.0 ключи рядом с $ref игнорируются, и описание поля потерялось",
-        "    бы; описание требует КБ. Обойти нельзя: на форму {{$ref, description}}",
-        "    kin-openapi отвечает ошибкой загрузки «extra sibling fields», тот же",
-        "    запрет у Spectral (no-$ref-siblings). Переход на OpenAPI 3.1 проверен и",
-        "    делает хуже — 206 композитных позиций вместо 130.",
-        "    В ОРИГИНАЛЕ: {orig_b} таких позиций, форма посимвольно та же —",
-        "        Chat.type:      {{allOf: [{{$ref: ChatType}}], description: ...}}",
-        "        Chat.status:    {{allOf: [{{$ref: ChatStatus}}], description: ...}}",
-        "        Message.sender: {{allOf: [{{$ref: User}}], description: ..., readOnly: false}}",
-        "    (dev.max.ru/docs-api/objects/Chat, /objects/Message).",
+        "[B] allOf вокруг одиночного $ref + description — {n} поз. В OpenAPI 3.0 соседи $ref",
+        "    игнорируются: без обёртки описание поля пропало бы, а форму {{$ref, description}}",
+        "    kin-openapi и Spectral не принимают вовсе. Переход на 3.1 проверен — хуже,",
+        "    206 композитных позиций вместо 130.",
+        "    В оригинале {orig_b} таких же позиций: Chat.type, Chat.status, Message.sender.",
     ],
     "C": [
-        "[C] allOf вокруг одиночного $ref + nullable — {n} поз.",
-        "    То же ограничение 3.0, но здесь на кону семантика, а не оформление:",
-        "    nullable рядом с $ref игнорируется, и поле перестаёт принимать null.",
-        "    Проверено на kin-openapi.",
-        "    В ОРИГИНАЛЕ: {orig_c} таких позиций —",
-        "        Chat.icon:           {{allOf: [{{$ref: Image}}], description: ..., nullable: true}}",
-        "        Chat.pinned_message: {{allOf: [{{$ref: Message}}], description: ..., nullable: true,",
-        "                              readOnly: false}}",
-        "        Message.link:        {{allOf: [{{$ref: LinkedMessage}}], description: ..., nullable: true}}",
-        "    (dev.max.ru/docs-api/objects/Chat, /objects/Message).",
+        "[C] allOf вокруг одиночного $ref + nullable — {n} поз. То же ограничение 3.0, но на",
+        "    кону семантика: без обёртки nullable игнорируется и поле перестаёт принимать null.",
+        "    В оригинале {orig_c} таких позиций: Chat.icon, Chat.pinned_message, Message.link.",
     ],
     "D": [
-        "[D] allOf-наследование без дискриминатора — {n} поз.",
-        "    Union'ами эти семейства не являются, в oneOf не сводятся. Расплющить их",
-        "    в обычные объекты технически можно, но у AttachmentPayload это сделало бы",
-        "    базу недостижимой (её удалил бы prune_unused_schemas), а у UserWithPhoto",
-        "    — молча потеряло бы 7 свойств, которым эмиттер не выписывает стабы, так",
-        "    как она сама база.",
-        "    В ОРИГИНАЛЕ: те же схемы записаны точно так же, одна в одну —",
+        "[D] allOf-наследование без дискриминатора — {n} поз. Union'ами эти семейства не",
+        "    являются, в oneOf не сводятся; расплющивание сделало бы базу AttachmentPayload",
+        "    недостижимой, а у UserWithPhoto молча потеряло бы 7 свойств.",
         "@D_EXAMPLES@",
-        "    Наследование зафиксировано и в текстах: страница",
-        "    dev.max.ru/docs-api/objects/UserWithPhoto называет объект «наследником",
-        "    схемы User» и показывает все 10 полей, включая унаследованные.",
-        "    Всего таких позиций в оригинале {orig_d} — у нас осталось {n}.",
     ],
     "E": [
-        "[E] anyOf без соседних ключей — {n} поз.",
-        "    Тело вебхука описано двумя равноправными формами: плоской UpdateUnified и",
-        "    строгим oneOf WebhookUpdate. Посторонних ключей рядом нет, требование",
-        "    [125] эта позиция не нарушает. Цена известна: anyOf проходит при",
-        "    совпадении хотя бы одной ветви, поэтому свои исходящие события следует",
-        "    сверять напрямую со схемой WebhookUpdate, а не с телом операции.",
-        "    В ОРИГИНАЛЕ: аналога нет и быть не может — контракт webhook-эндпоинта MAX",
-        "    не публикует, его реализует разработчик бота. Ни одного anyOf в",
-        "    официальной схеме нет.",
+        "[E] anyOf без соседних ключей — {n} поз. Тело вебхука: на выбор плоская UpdateUnified",
+        "    или строгий oneOf WebhookUpdate, посторонних ключей рядом нет. anyOf проходит при",
+        "    совпадении любой ветви, поэтому свои исходящие события сверяйте прямо со схемой",
+        "    WebhookUpdate. В оригинале аналога нет — webhook-контракт MAX не публикует.",
     ],
     "?": [
-        "[?] композитные схемы неизвестного вида — {n} поз.",
-        "    Скрипт их не классифицировал: проверьте вручную.",
+        "[?] композитные схемы неизвестного вида — {n} поз. Скрипт их не классифицировал:",
+        "    проверьте вручную.",
     ],
 }
 
 HEADER_INTRO = [
-    "Замечание SCHEMA-валидатора: «Не рекомендуется использовать oneOf, anyOf,",
-    "allOf совместно с другими ключами, т.к. композитная часть будет",
-    "проигнорирована при генерации».",
-    "",
-    "Композитных позиций в документе — {total}, и все они относятся к случаям ниже;",
-    "у каждой стоит однострочный комментарий с буквой случая. Развёрнутый разбор —",
-    "в maxapi/README.md, раздел «Что остаётся композитным — и почему это потолок».",
-    "",
-    "Главное про все пять случаев сразу: КОМПОЗИЦИЯ ЗДЕСЬ НЕ НАША ВЫДУМКА. У каждого",
-    "случая (кроме [E], которого в оригинале и не может быть) есть буквальный аналог",
-    "в официальном контракте MAX — ниже, под пометкой «В ОРИГИНАЛЕ», приведены",
-    "конкретные схемы. Источник сравнения: max-messenger-bot/max-bot-api-schemas,",
-    "файл schema_2026_08_11.json (версия API 0.0.33), копия без изменений лежит в",
-    "maxapi/reference/max-openapi-official.json; человекочитаемая версия того же —",
-    "на dev.max.ru/docs-api, страницы объектов по адресу /docs-api/objects/<Имя>.",
+    "Композитных позиций — {total}; у каждой ниже стоит однострочный комментарий с буквой",
+    "случая. Всё оставшееся — либо форма, скопированная из официального контракта MAX",
+    "(reference/max-openapi-official.json — снимок schema_2026_08_11.json, API 0.0.33; он же",
+    "на dev.max.ru/docs-api/objects/<Имя>), либо ограничение самого OpenAPI 3.0.",
+    "Подробный разбор — maxapi/README.md, «Что остаётся композитным — и почему это потолок».",
     "",
 ]
 
 HEADER_OUTRO = [
     "",
-    "Итог сравнения: в официальной схеме MAX {orig_total} композитных позиций",
-    "({orig_b} случая [B] + {orig_c} случая [C] + {orig_d} случая [D]), в этом",
-    "документе — {total}. Настоящего allOf-наследования почти не осталось: шесть",
-    "семейств переписаны в oneOf + discriminator. То есть по требованию [125]",
-    "документ уже чище источника, транскрипцией которого является, а всё",
-    "оставшееся — это либо форма, скопированная у MAX, либо ограничение самого",
-    "OpenAPI 3.0.",
+    "Итого: в официальной схеме MAX {orig_total} композитных позиций ({orig_b} [B], {orig_c} [C],",
+    "{orig_d} [D]), в этом документе — {total}. Настоящего allOf-наследования почти не осталось:",
+    "шесть семейств переписаны в oneOf + discriminator.",
+]
+
+# Тот же итог без цифр оригинала — на случай, когда снимка референса нет.
+HEADER_OUTRO_PLAIN = [
+    "",
+    "Настоящего allOf-наследования почти не осталось: шесть семейств переписаны",
+    "в oneOf + discriminator.",
 ]
 
 
@@ -246,22 +200,27 @@ def collect(node, sites):
 
 
 def strip_own(lines):
-    """Удаление строк предыдущего прогона: блок шапки и комментарии позиций."""
-    out, inside = [], False
+    """Удаление строк предыдущего прогона: блок шапки и комментарии позиций.
+
+    Маркеры прежней редакции убираются наравне с нынешними — иначе файл,
+    размеченный старым скриптом, получил бы вторую шапку поверх первой.
+    """
+    out, inside, close = [], False, None
     for line in lines:
         stripped = line.strip()
-        if stripped == HEADER_OPEN:
+        if not inside and stripped in (HEADER_OPEN, LEGACY_HEADER_OPEN):
             inside = True
+            close = HEADER_CLOSE if stripped == HEADER_OPEN else LEGACY_HEADER_CLOSE
             continue
         if inside:
-            if stripped == HEADER_CLOSE:
+            if stripped == close:
                 inside = False
             continue
-        if stripped.startswith(SITE_PREFIX):
+        if stripped.startswith((SITE_PREFIX, LEGACY_SITE_PREFIX)):
             continue
         out.append(line)
     if inside:
-        print("Незакрытый блок КБ[125] в шапке — файл правили вручную, прерываю")
+        print("Незакрытый блок шапки — файл правили вручную, прерываю")
         sys.exit(2)
     return out
 
@@ -311,20 +270,21 @@ def official():
 
 
 def d_examples(children, off):
-    """Строки «В ОРИГИНАЛЕ» для случая [D] — только реально сверенные схемы."""
-    pairs = []
+    """Строка «в оригинале» для случая [D] — только реально сверенные схемы."""
+    names = []
     for name, base in children:
         # В webhook-документе схемы приходят с префиксом namespace-а.
         plain, plain_base = name.removeprefix(NS_PREFIX), (base or "").removeprefix(NS_PREFIX)
         if off["inherit"].get(plain) == plain_base:
-            pairs.append((plain, plain_base))
-    if not pairs:
-        return ["        (в снимке оригинала таких схем не нашлось — проверьте вручную)"]
-    width = max(len(n) for n, _ in pairs) + 1
-    return [
-        f"        {n + ':':<{width}} {{allOf: [{{$ref: {b}}}, {{properties: ...}}]}}"
-        for n, b in sorted(pairs)
-    ]
+            names.append(plain)
+    if not names:
+        return ["    (в снимке оригинала таких схем не нашлось — проверьте вручную)"]
+    text = (
+        f"В оригинале ({off['counts']['D']} поз.) те же схемы записаны один в один: "
+        + ", ".join(sorted(names))
+        + "."
+    )
+    return textwrap.wrap(text, width=86, initial_indent="    ", subsequent_indent="    ")
 
 
 def header(counts, total, children, off):
@@ -342,13 +302,14 @@ def header(counts, total, children, off):
             continue
         for text in CASE_TEXT[case]:
             if text == "@D_EXAMPLES@":
-                body += d_examples(children, off)
+                if off:
+                    body += d_examples(children, off)
                 continue
             if not off and "{orig_" in text:
                 continue  # без референса цифру подставить не из чего
             body.append(text.format(n=counts[case], **ctx))
         body.append("")
-    body = body[:-1] + [t.format(**ctx) for t in HEADER_OUTRO]
+    body = body[:-1] + [t.format(**ctx) for t in (HEADER_OUTRO if off else HEADER_OUTRO_PLAIN)]
     lines = [HEADER_OPEN] + [("# " + t).rstrip() for t in body] + [HEADER_CLOSE]
     return [l + "\n" for l in lines]
 
