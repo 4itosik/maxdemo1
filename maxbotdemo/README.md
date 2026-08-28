@@ -92,7 +92,7 @@ cloudflared tunnel --protocol http2 --url http://localhost:8080
 
 ```sh
 export MAX_BOT_TOKEN='ваш-токен'
-export WEBHOOK_URL='https://xxxx-yyyy.trycloudflare.com/webhook'
+export WEBHOOK_URL='https://xxxx-yyyy.trycloudflare.com/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34'
 export WEBHOOK_SECRET='dev-secret-123'
 export MAX_API_CA_FILE='certs/russian_trusted_root_ca.cer'   # если нужен
 
@@ -146,7 +146,7 @@ go run ./cmd/bot
 ```sh
 MAX_BOT_TOKEN=bot.…                    # выдаёт мок при регистрации бота
 MAX_API_BASE_URL=http://localhost:8080
-WEBHOOK_URL=http://localhost:8081/webhook
+WEBHOOK_URL=http://localhost:8081/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34
 LISTEN_ADDR=:8081
 WEBHOOK_SECRET=mock-secret-123
 ```
@@ -192,7 +192,8 @@ cloudflared tunnel --protocol http2 --url http://localhost:8090
 
 ```sh
 set -a && . ./.env.live && set +a
-WEBHOOK_URL='https://xxxx-yyyy.trycloudflare.com/webhook' go run ./cmd/bot
+WEBHOOK_URL='https://xxxx-yyyy.trycloudflare.com/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34' \
+  go run ./cmd/bot
 ```
 
 Адрес туннеля меняется при каждом запуске, поэтому передавать его переменной
@@ -204,8 +205,8 @@ WEBHOOK_URL='https://xxxx-yyyy.trycloudflare.com/webhook' go run ./cmd/bot
 Признак удачного старта — две записи:
 
 ```
-"msg":"бот зарегистрирован" … "webhook":"https://…/webhook"
-"msg":"слушаем события","addr":":8090","path":"/webhook"
+"msg":"бот зарегистрирован" … "webhook":"https://…/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34"
+"msg":"слушаем события","addr":":8090","path":"/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34"
 ```
 
 **Проверка цепочки.** Что туннель действительно доводит запрос до бота, видно
@@ -214,7 +215,8 @@ WEBHOOK_URL='https://xxxx-yyyy.trycloudflare.com/webhook' go run ./cmd/bot
 ```sh
 set -a && . ./.env.live && set +a          # за секретом подписки
 
-curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://xxxx-yyyy.trycloudflare.com/webhook \
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  https://xxxx-yyyy.trycloudflare.com/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34 \
   -H 'Content-Type: application/json' -H "X-Max-Bot-Api-Secret: $WEBHOOK_SECRET" \
   -d '{"update_type":"bot_stopped","timestamp":1,"chat_id":777,"user":{"user_id":42}}'
 ```
@@ -269,7 +271,7 @@ cloudflared tunnel --protocol http2 --url http://localhost:8090
 # 2 — бот; лог пишем в файл, он и есть материал регресса
 cd maxbotdemo
 set -a && . ./.env.live && set +a
-WEBHOOK_URL='https://ВАШ-АДРЕС.trycloudflare.com/webhook' \
+WEBHOOK_URL='https://ВАШ-АДРЕС.trycloudflare.com/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34' \
   go run ./cmd/bot 2>&1 | tee /tmp/max-regress.log
 ```
 
@@ -442,7 +444,7 @@ go run ./cmd/bot 2>&1 | jq 'select(.msg == "запрос к API") | {path, paylo
 | Переменная | Обяз. | По умолчанию | Назначение |
 |---|---|---|---|
 | `MAX_BOT_TOKEN` | да | — | токен бота; принимается и как `BOT_TOKEN` |
-| `WEBHOOK_URL` | да | — | публичный `https://…/путь`, куда MAX шлёт события; `http://` допустим только для петлевого адреса (профиль max-mock) |
+| `WEBHOOK_URL` | да | — | публичный адрес, куда MAX шлёт события; путь — по контракту: `https://…/max/v1.0/webhooks/{integrationId}`. `http://` допустим только для петлевого адреса (профиль max-mock) |
 | `WEBHOOK_SECRET` | нет | — | секрет подписки, `[A-Za-z0-9_-]{5,256}` |
 | `LISTEN_ADDR` | нет | `:8080` | адрес локального HTTP-сервера |
 | `MAX_API_CA_FILE` | нет | — | PEM/DER с корневым сертификатом Минцифры |
@@ -450,7 +452,14 @@ go run ./cmd/bot 2>&1 | jq 'select(.msg == "запрос к API") | {path, paylo
 | `UNSUBSCRIBE_ON_EXIT` | нет | — | `1` — снять подписку при остановке |
 
 Путь webhook-сервера берётся из `WEBHOOK_URL`: для
-`https://example.com/hooks/max` сервер слушает `/hooks/max`.
+`https://example.com/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34` сервер слушает
+`/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34`.
+
+Форма пути задана контрактом `openapi.MaxBotWebhook.yaml` —
+`/max/v1.0/webhooks/{integrationId}`, где последний сегмент — идентификатор
+интеграции (UUID, 36 символов). `loadConfig` проверяет её на старте, до
+регистрации подписки: адрес с другим путём платформа приняла бы молча, и
+расхождение всплыло бы уже на периметре.
 
 ## Тесты
 
@@ -465,7 +474,7 @@ go test -race ./...
 Проверить приём события без туннеля:
 
 ```sh
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:8080/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34 \
   -H 'X-Max-Bot-Api-Secret: dev-secret-123' \
   -H 'Content-Type: application/json' \
   -d '{"update_type":"message_created","timestamp":1,
@@ -490,8 +499,8 @@ curl -X POST http://localhost:8080/webhook \
   URL и набор типов. Если поменять `WEBHOOK_SECRET`, оставив URL и типы
   прежними, подписка на стороне Max останется со старым секретом, и все
   события начнут отбиваться `401`. Диагностируется по `Warn` «запрос с
-  неверным секретом отклонён» в логе; чинится сменой `WEBHOOK_URL` (например,
-  добавлением версии в путь) или снятием подписки вручную.
+  неверным секретом отклонён» в логе; чинится сменой `WEBHOOK_URL` (другим
+  `integrationId` в пути) или снятием подписки вручную.
 - **Вложения ограничены.** Бот читает `contact` и `location` и отправляет
   `inline_keyboard`; картинки, файлы, стикеры, аудио и видео — ни в ту, ни в
   другую сторону.

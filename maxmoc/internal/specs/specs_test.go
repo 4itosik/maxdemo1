@@ -296,6 +296,27 @@ func TestSubscriptionAcceptsHTTPURL(t *testing.T) {
 
 // Послабление наносится на паттерн, а не отменяет его: если контракт
 // перепишут, загрузчик обязан упасть, а не молча оставить мок строгим.
+// Синтетический URL для проверки тела события собирается подстановкой
+// значения в параметры пути (`/max/v1.0/webhooks/{integrationId}`). Если
+// подставленное значение перестанет удовлетворять схеме параметра, событий
+// не отправит ни одного — поэтому расхождение обязано всплывать на Load(),
+// а не первым отвергнутым событием.
+func TestWebhookSampleURLSatisfiesContract(t *testing.T) {
+	s := load(t)
+	if !strings.Contains(s.webhookURL, webhookPathParamSample) {
+		t.Fatalf("URL = %q, ожидалась подстановка %q", s.webhookURL, webhookPathParamSample)
+	}
+	if err := s.checkWebhookURL(); err != nil {
+		t.Fatalf("собранный URL не проходит контракт: %v", err)
+	}
+
+	bad := *s
+	bad.webhookURL = "http://webhook.local/max/v1.0/webhooks/not-a-uuid"
+	if err := bad.checkWebhookURL(); err == nil {
+		t.Error("страж не заметил значения, не подходящего схеме параметра пути")
+	}
+}
+
 func TestRelaxURLSchemeRejectsUnexpectedPattern(t *testing.T) {
 	s := load(t)
 	url := s.BotAPI.Components.Schemas["SubscriptionRequestBody"].Value.Properties["url"]

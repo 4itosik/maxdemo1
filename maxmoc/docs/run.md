@@ -107,7 +107,7 @@ curl -s http://localhost:8080/me -H "Authorization: <token>" | jq .
 ```bash
 curl -s -X POST http://localhost:8080/subscriptions \
   -H "Authorization: <token>" -H 'Content-Type: application/json' \
-  -d '{"url":"http://<адрес-стенда>/webhook","secret":"stand-secret-123"}' | jq .
+  -d '{"url":"http://<адрес-стенда>/max/v1.0/webhooks/<integrationId>","secret":"stand-secret-123"}' | jq .
 ```
 
 Мок принимает `http://` (контракт Max требует `https://`, но в закрытом

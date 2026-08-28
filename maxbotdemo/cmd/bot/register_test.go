@@ -85,8 +85,8 @@ func newFakeAPI(t *testing.T, existing []maxapi.Subscription, failPath string) (
 func testConfig() config {
 	return config{
 		Token:       "test-token",
-		WebhookURL:  "https://example.test/webhook",
-		WebhookPath: "/webhook",
+		WebhookURL:  "https://example.test" + webhookPathSample,
+		WebhookPath: webhookPathSample,
 		Secret:      "top-secret_1",
 	}
 }
@@ -112,7 +112,7 @@ func TestRegisterChecksTokenPublishesCommandsAndSubscribes(t *testing.T) {
 	if strings.Join(api.calls, ", ") != want {
 		t.Errorf("вызовы = %v,\nwant %s", api.calls, want)
 	}
-	if got := subURLs(api.subs); len(got) != 1 || got[0] != "https://example.test/webhook" {
+	if got := subURLs(api.subs); len(got) != 1 || got[0] != testConfig().WebhookURL {
 		t.Errorf("подписки = %v, want только наш адрес", got)
 	}
 	if info.Username != "demo_bot" {
@@ -132,8 +132,8 @@ func TestRegisterRemovesStaleSubscriptions(t *testing.T) {
 	}
 
 	got := subURLs(api.subs)
-	if len(got) != 1 || got[0] != "https://example.test/webhook" {
-		t.Errorf("подписки = %v, want только https://example.test/webhook", got)
+	if len(got) != 1 || got[0] != testConfig().WebhookURL {
+		t.Errorf("подписки = %v, want только %s", got, testConfig().WebhookURL)
 	}
 }
 
@@ -149,7 +149,7 @@ func reversed(in []string) []string {
 
 func TestRegisterDoesNotResubscribeWhenUpdateTypesMatch(t *testing.T) {
 	existing := []maxapi.Subscription{{
-		URL:         "https://example.test/webhook",
+		URL:         testConfig().WebhookURL,
 		UpdateTypes: reversed(bot.UpdateTypes()),
 	}}
 	client, api := newFakeAPI(t, existing, "")
@@ -170,7 +170,7 @@ func TestRegisterDoesNotResubscribeWhenUpdateTypesMatch(t *testing.T) {
 // события не пришли бы ни разу, причём молча.
 func TestRegisterResubscribesWhenUpdateTypesDiffer(t *testing.T) {
 	existing := []maxapi.Subscription{{
-		URL:         "https://example.test/webhook",
+		URL:         testConfig().WebhookURL,
 		UpdateTypes: []string{maxapi.UpdateMessageCreated},
 	}}
 	client, api := newFakeAPI(t, existing, "")

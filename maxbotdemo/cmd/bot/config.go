@@ -12,6 +12,17 @@ import (
 // secretPattern повторяет ограничение Max на поле secret подписки.
 var secretPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{5,256}$`)
 
+// webhookPathPattern повторяет путь webhook-эндпоинта из контракта
+// (`openapi.MaxBotWebhook.yaml`): `/max/v1.0/webhooks/{integrationId}`, где
+// последний сегмент — идентификатор интеграции, UUID из 36 символов
+// (hex-группы 8-4-4-4-12 через дефисы).
+//
+// Путь проверяется на старте, до регистрации подписки: адрес с другим путём
+// платформа примет, и расхождение с контрактом обнаружилось бы уже на
+// периметре — отвергнутыми или ушедшими не туда событиями.
+var webhookPathPattern = regexp.MustCompile(
+	`^/max/v1\.0/webhooks/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
 // config — настройки бота, читаемые из переменных окружения.
 type config struct {
 	Token             string // MAX_BOT_TOKEN
@@ -82,8 +93,12 @@ func webhookPath(raw string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("WEBHOOK_URL не разбирается как адрес: %w", err)
 	}
-	if u.Path == "" || u.Path == "/" {
-		return "", fmt.Errorf("WEBHOOK_URL должен содержать путь, например https://example.com/webhook")
+	if !webhookPathPattern.MatchString(u.Path) {
+		return "", fmt.Errorf("WEBHOOK_URL: путь %q не соответствует контракту "+
+			"/max/v1.0/webhooks/{integrationId} — последний сегмент должен быть "+
+			"идентификатором интеграции (UUID, 36 символов). Пример: "+
+			"https://example.com/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34",
+			u.Path)
 	}
 	return u.Path, nil
 }

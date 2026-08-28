@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// webhookPathSample — путь по контракту webhook-эндпоинта
+// (`/max/v1.0/webhooks/{integrationId}`); значение UUID произвольное.
+const webhookPathSample = "/max/v1.0/webhooks/b3d4a7f0-1c2e-4f6a-9d8b-5e0c7a1f2b34"
+
 // envOf делает из карты функцию чтения переменных окружения.
 func envOf(vars map[string]string) func(string) string {
 	return func(key string) string { return vars[key] }
@@ -13,7 +17,7 @@ func envOf(vars map[string]string) func(string) string {
 func validEnv() map[string]string {
 	return map[string]string{
 		"MAX_BOT_TOKEN": "token-123",
-		"WEBHOOK_URL":   "https://example.test/webhook",
+		"WEBHOOK_URL":   "https://example.test" + webhookPathSample,
 	}
 }
 
@@ -26,14 +30,14 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.Token != "token-123" {
 		t.Errorf("Token = %q, want %q", cfg.Token, "token-123")
 	}
-	if cfg.WebhookURL != "https://example.test/webhook" {
+	if cfg.WebhookURL != "https://example.test"+webhookPathSample {
 		t.Errorf("WebhookURL = %q", cfg.WebhookURL)
 	}
 	if cfg.ListenAddr != ":8080" {
 		t.Errorf("ListenAddr = %q, want %q", cfg.ListenAddr, ":8080")
 	}
-	if cfg.WebhookPath != "/webhook" {
-		t.Errorf("WebhookPath = %q, want %q", cfg.WebhookPath, "/webhook")
+	if cfg.WebhookPath != webhookPathSample {
+		t.Errorf("WebhookPath = %q, want %q", cfg.WebhookPath, webhookPathSample)
 	}
 	if cfg.Secret != "" {
 		t.Errorf("Secret = %q, want пустую строку", cfg.Secret)
@@ -120,15 +124,16 @@ func TestLoadConfigOverrides(t *testing.T) {
 
 func TestLoadConfigDerivesWebhookPathFromURL(t *testing.T) {
 	vars := validEnv()
-	vars["WEBHOOK_URL"] = "https://example.test/hooks/max"
+	const other = "/max/v1.0/webhooks/7c1e9a20-4bd3-4f18-8e6a-2d90cf5b7a01"
+	vars["WEBHOOK_URL"] = "https://example.test" + other
 
 	cfg, err := loadConfig(envOf(vars))
 	if err != nil {
 		t.Fatalf("loadConfig: %v", err)
 	}
 
-	if cfg.WebhookPath != "/hooks/max" {
-		t.Errorf("WebhookPath = %q, want %q", cfg.WebhookPath, "/hooks/max")
+	if cfg.WebhookPath != other {
+		t.Errorf("WebhookPath = %q, want %q", cfg.WebhookPath, other)
 	}
 }
 
@@ -136,15 +141,15 @@ func TestLoadConfigDerivesWebhookPathFromURL(t *testing.T) {
 // него должна проходить — туннеля с сертификатом в этом сценарии нет.
 func TestLoadConfigAcceptsLoopbackHTTPWebhook(t *testing.T) {
 	vars := validEnv()
-	vars["WEBHOOK_URL"] = "http://localhost:8081/webhook"
+	vars["WEBHOOK_URL"] = "http://localhost:8081" + webhookPathSample
 
 	cfg, err := loadConfig(envOf(vars))
 	if err != nil {
 		t.Fatalf("loadConfig: %v", err)
 	}
 
-	if cfg.WebhookPath != "/webhook" {
-		t.Errorf("WebhookPath = %q, want %q", cfg.WebhookPath, "/webhook")
+	if cfg.WebhookPath != webhookPathSample {
+		t.Errorf("WebhookPath = %q, want %q", cfg.WebhookPath, webhookPathSample)
 	}
 }
 
@@ -166,17 +171,29 @@ func TestLoadConfigRejectsBadInput(t *testing.T) {
 		},
 		{
 			name:    "URL по HTTP",
-			mutate:  func(v map[string]string) { v["WEBHOOK_URL"] = "http://example.test/webhook" },
+			mutate:  func(v map[string]string) { v["WEBHOOK_URL"] = "http://example.test" + webhookPathSample },
 			wantErr: "https",
 		},
 		{
 			name:    "URL без пути",
 			mutate:  func(v map[string]string) { v["WEBHOOK_URL"] = "https://example.test" },
-			wantErr: "путь",
+			wantErr: "не соответствует контракту",
+		},
+		{
+			name:    "путь не по контракту",
+			mutate:  func(v map[string]string) { v["WEBHOOK_URL"] = "https://example.test/webhook" },
+			wantErr: "/max/v1.0/webhooks/{integrationId}",
+		},
+		{
+			name: "идентификатор интеграции не UUID",
+			mutate: func(v map[string]string) {
+				v["WEBHOOK_URL"] = "https://example.test/max/v1.0/webhooks/not-a-uuid"
+			},
+			wantErr: "UUID",
 		},
 		{
 			name:    "битый URL",
-			mutate:  func(v map[string]string) { v["WEBHOOK_URL"] = "https://exa mple.test/webhook" },
+			mutate:  func(v map[string]string) { v["WEBHOOK_URL"] = "https://exa mple.test" + webhookPathSample },
 			wantErr: "WEBHOOK_URL",
 		},
 		{
