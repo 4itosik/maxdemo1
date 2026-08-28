@@ -55,7 +55,7 @@ info:
 tags:
   - name: webhook-server
 paths:
-  /:
+  /max/v1.0/webhooks/{integrationId}:
     post:
       operationId: WebhookReceiver_receiveUpdate
       summary: Приём события от платформы MAX
@@ -71,6 +71,21 @@ paths:
         `X-Max-Bot-Api-Secret` — проверяйте его, чтобы убедиться, что запрос
         пришёл от MAX, а не от постороннего.
       parameters:
+        - name: integrationId
+          in: path
+          required: true
+          description: |-
+            Идентификатор интеграции — последний сегмент URL, который вы
+            регистрируете через `POST /subscriptions`. UUID (RFC 4122): 36
+            символов, hex-группы 8-4-4-4-12 через дефисы. Тип строковый, а не
+            отдельный uuid-скаляр: в OpenAPI 3.0 `format: uuid` — только
+            аннотация, реально ограничивают pattern и длина.
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+            minLength: 36
+            maxLength: 36
         - name: X-Max-Bot-Api-Secret
           in: header
           required: false

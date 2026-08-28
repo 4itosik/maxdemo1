@@ -43,9 +43,22 @@ interface WebhookReceiver {
    * пришёл от MAX, а не от постороннего.
    */
   @summary("Приём события от платформы MAX")
-  @route("/")
+  @route("/max/v1.0/webhooks/{integrationId}")
   @post
   receiveUpdate(
+    /**
+     * Идентификатор интеграции — последний сегмент URL, который вы
+     * регистрируете через `POST /subscriptions`. UUID (RFC 4122): 36
+     * символов, hex-группы 8-4-4-4-12 через дефисы. Тип строковый, а не
+     * отдельный uuid-скаляр: в OpenAPI 3.0 `format: uuid` — только
+     * аннотация, реально ограничивают pattern и длина.
+     */
+    @format("uuid")
+    @minLength(36)
+    @maxLength(36)
+    @pattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    @path integrationId: string,
+
     /** Секрет, заданный при создании подписки (см. SubscriptionRequestBody.secret). 5..256 — значение из официальной схемы MAX */
     @minLength(5)
     @maxLength(256)

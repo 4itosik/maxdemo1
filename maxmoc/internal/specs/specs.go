@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/dlclark/regexp2"
@@ -214,13 +215,63 @@ func Load() (*Specs, error) {
 	// В webhook-контракте ровно один путь и один метод — находим их один раз.
 	for path, item := range wh.Paths.Map() {
 		for method := range item.Operations() {
-			s.webhookURL, s.webhookMethod = "http://webhook.local"+path, method
+			s.webhookURL, s.webhookMethod = webhookSampleURL(path), method
 		}
 	}
 	if s.webhookMethod == "" {
 		return nil, errors.New("в webhook-контракте не найдено ни одной операции")
 	}
+	// Синтетический URL обязан сам проходить контракт: иначе каждое событие
+	// падало бы на параметрах пути, не дойдя до проверки тела.
+	if err := s.checkWebhookURL(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// pathParam — шаблон параметра в пути контракта: `{integrationId}`.
+var pathParam = regexp.MustCompile(`\{[^/}]+\}`)
+
+// webhookPathParamSample — чем заполняются параметры пути в синтетическом
+// URL (см. ValidateWebhookBody).
+//
+// Адресом мок не пользуется: события уходят на URL из подписки, а этот нужен
+// лишь затем, чтобы kin-openapi нашёл операцию и проверил ТЕЛО. Но
+// ValidateRequest заодно проверяет параметры пути, поэтому подставленное
+// значение обязано удовлетворять их схемам. Нулевой UUID подходит под
+// `integrationId` — единственный параметр нынешнего контракта; если формат
+// параметра изменится, Load() скажет об этом сразу (checkWebhookURL), а не
+// первым отвергнутым событием.
+const webhookPathParamSample = "00000000-0000-0000-0000-000000000000"
+
+func webhookSampleURL(path string) string {
+	return "http://webhook.local" + pathParam.ReplaceAllString(path, webhookPathParamSample)
+}
+
+// checkWebhookURL сверяет синтетический URL с контрактом — всё, кроме тела:
+// маршрут находится, параметры пути схемам соответствуют.
+func (s *Specs) checkWebhookURL() error {
+	req, err := http.NewRequest(s.webhookMethod, s.webhookURL, nil)
+	if err != nil {
+		return err
+	}
+	route, params, err := s.webhookRouter.FindRoute(req)
+	if err != nil {
+		return fmt.Errorf("маршрут webhook не найден по %s: %w", s.webhookURL, err)
+	}
+	opts := requestOptions()
+	opts.ExcludeRequestBody = true
+	if err := openapi3filter.ValidateRequest(context.Background(), &openapi3filter.RequestValidationInput{
+		Request:     req,
+		PathParams:  params,
+		QueryParams: url.Values{},
+		Route:       route,
+		Options:     opts,
+	}); err != nil {
+		return fmt.Errorf("подставленное значение параметров пути (%s) не проходит webhook-контракт: %w",
+			webhookPathParamSample, err)
+	}
+	return nil
 }
 
 // Version возвращает версию контракта Bot API.
