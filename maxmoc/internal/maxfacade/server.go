@@ -487,7 +487,8 @@ func (s *Server) subscribe(w http.ResponseWriter, route *routers.Route, bot *sto
 	}
 	result := wire.SimpleQueryResult{Success: true}
 	// Контракт требует https, но стенды закрытого контура живут на http.
-	// Подписку принимаем и честно помечаем это в ответе.
+	// Подписку принимаем (послабление наносится на сам контракт — см.
+	// specs.allowHTTPWebhookURL) и честно помечаем это в ответе.
 	if strings.HasPrefix(strings.ToLower(req.URL), "http://") {
 		result.Message = "подписка на http:// принята (контракт Max требует https)"
 	}

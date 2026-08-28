@@ -275,7 +275,7 @@ func TestUnavailableStandDoesNotBreakMock(t *testing.T) {
 	m := newMock(t)
 	bot := decode[store.Bot](t, m.mustCall(t, "POST", "/mock/api/bots", `{"name":"Бот","username":"bot"}`, ""))
 	m.mustCall(t, "POST", "/subscriptions",
-		`{"url":"http://127.0.0.1:1/недоступно","secret":"`+secret+`"}`, bot.Token)
+		`{"url":"https://127.0.0.1:1/недоступно","secret":"`+secret+`"}`, bot.Token)
 
 	created := decode[struct {
 		Client store.Client `json:"client"`

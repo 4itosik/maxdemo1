@@ -482,7 +482,7 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	f := newFixture(t)
 
 	resp, body := f.do(t, "POST", "/subscriptions",
-		`{"url":"http://stand.local/hook","update_types":["message_created"],"secret":"abcdef"}`)
+		`{"url":"https://stand.local/hook","update_types":["message_created"],"secret":"abcdef"}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("подписка: %d %s", resp.StatusCode, body)
 	}
@@ -490,9 +490,6 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	_ = json.Unmarshal(body, &res)
 	if !res.Success {
 		t.Errorf("подписка не удалась: %s", body)
-	}
-	if res.Message == "" {
-		t.Error("подписка на http:// должна сопровождаться пометкой в ответе")
 	}
 
 	resp, body = f.do(t, "GET", "/subscriptions", "")
@@ -503,14 +500,14 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(body, &subs); err != nil {
 		t.Fatal(err)
 	}
-	if len(subs.Subscriptions) != 1 || subs.Subscriptions[0].URL != "http://stand.local/hook" {
+	if len(subs.Subscriptions) != 1 || subs.Subscriptions[0].URL != "https://stand.local/hook" {
 		t.Fatalf("подписки: %+v", subs.Subscriptions)
 	}
 	if subs.Subscriptions[0].Time == 0 {
 		t.Error("время создания подписки не заполнено")
 	}
 
-	resp, _ = f.do(t, "DELETE", "/subscriptions?url=http://stand.local/hook", "")
+	resp, _ = f.do(t, "DELETE", "/subscriptions?url=https://stand.local/hook", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("отписка: %d", resp.StatusCode)
 	}
@@ -518,6 +515,45 @@ func TestSubscriptionsRoundTrip(t *testing.T) {
 	_ = json.Unmarshal(body, &subs)
 	if len(subs.Subscriptions) != 0 {
 		t.Errorf("после отписки осталось: %+v", subs.Subscriptions)
+	}
+}
+
+// Подписку на http:// мок принимает, хотя контракт требует https: стенды
+// закрытого контура живут на открытом HTTP, и отказ сделал бы мок там
+// неприменимым (см. specs.allowHTTPWebhookURL). Отступление помечается в
+// поле message ответа, а снять такую подписку должно быть можно тем же
+// DELETE — иначе адрес остаётся в моке навсегда.
+func TestSubscriptionAcceptsHTTPURL(t *testing.T) {
+	f := newFixture(t)
+	const url = "http://stand.local:8081/hook"
+
+	resp, body := f.do(t, "POST", "/subscriptions", `{"url":"`+url+`","secret":"abcdef"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("подписка на http:// отвергнута: %d %s", resp.StatusCode, body)
+	}
+	var res wire.SimpleQueryResult
+	if err := json.Unmarshal(body, &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.Success {
+		t.Errorf("подписка не удалась: %s", body)
+	}
+	if !strings.Contains(res.Message, "http://") {
+		t.Errorf("отступление от контракта не помечено в ответе: %q", res.Message)
+	}
+
+	resp, body = f.do(t, "DELETE", "/subscriptions?url="+url, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("отписка от http:// отвергнута: %d %s", resp.StatusCode, body)
+	}
+
+	// Послабление касается только схемы адреса.
+	resp, body = f.do(t, "POST", "/subscriptions", `{"url":"ftp://stand.local/hook"}`)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("подписка на ftp:// принята: %d %s", resp.StatusCode, body)
+	}
+	if code := decodeError(t, body).Code; code != CodeValidation {
+		t.Errorf("код: %s", code)
 	}
 }
 

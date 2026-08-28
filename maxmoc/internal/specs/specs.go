@@ -5,6 +5,7 @@ package specs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +24,10 @@ import (
 
 // ErrRouteNotFound — путь/метод отсутствует в контракте Bot API.
 var ErrRouteNotFound = errors.New("маршрут не описан в контракте")
+
+// strictUpdateSchema — имя строгой ветви контракта вебхука: oneOf из 16
+// конкретных типов событий с дискриминатором по update_type.
+const strictUpdateSchema = "WebhookUpdate"
 
 // Specs — загруженные контракты и построенные по ним роутеры.
 type Specs struct {
@@ -68,7 +73,7 @@ func requestOptions() *openapi3filter.Options {
 	}
 }
 
-func loadDoc(name string) (*openapi3.T, error) {
+func loadDoc(name string, adjust ...func(*openapi3.T) error) (*openapi3.T, error) {
 	b, err := api.FS.ReadFile(name)
 	if err != nil {
 		return nil, fmt.Errorf("чтение %s: %w", name, err)
@@ -79,7 +84,13 @@ func loadDoc(name string) (*openapi3.T, error) {
 		return nil, fmt.Errorf("разбор %s: %w", name, err)
 	}
 	normalizeAuthSchemes(doc)
-	normalizeChatType(doc)
+	// Правки наносятся до Validate: документ должен пройти проверку ровно в
+	// том виде, в котором по нему потом валидируются запросы.
+	for _, fn := range adjust {
+		if err := fn(doc); err != nil {
+			return nil, fmt.Errorf("правка %s: %w", name, err)
+		}
+	}
 	// Примеры в спеке снабжены ремарками и не обязаны проходить валидацию схем.
 	if err := doc.Validate(loader.Context,
 		openapi3.DisableExamplesValidation(),
@@ -107,36 +118,74 @@ func normalizeAuthSchemes(doc *openapi3.T) {
 	}
 }
 
-// normalizeChatType дополняет enum ChatType значением "dialog".
+// Адрес вебхука в контракте: `https://` и ничего больше.
+const (
+	httpsWebhookURL = `^https://.+$`
+	anyWebhookURL   = `^https?://.+$`
+)
+
+// allowHTTPWebhookURL разрешает подписку на `http://`-адрес.
 //
-// В контракте ChatType объявлен как enum ["chat"], хотя его собственное
-// описание — «Тип чата: диалог, чат». Тот же дефект в официальной схеме Max
-// (reference/max-openapi-official.json в maxapi), откуда он и переписан:
-// значение "dialog" забыли, хотя реальная платформа возвращает именно его в
-// Recipient.chat_type для диалогов «клиент ↔ бот». Мок эмулирует только
-// диалоги, поэтому без этой правки он не смог бы отдать ни одного корректного
-// сообщения. Правка расширяет enum, а не подменяет его: "chat" остаётся
-// допустимым.
-func normalizeChatType(doc *openapi3.T) {
-	if doc.Components == nil {
-		return
+// Это не починка артефакта, а сознательное отступление мока от контракта —
+// такое же, как паритет авторизации: контракт здесь прав (живой Max требует
+// HTTPS, и `pattern` лишь переносит это требование из описания поля в
+// проверяемую форму), но мок ставят в закрытый контур, где стенды КЦ живут
+// на открытом HTTP, а выпустить им сертификат зачастую негде и некому.
+// Отвергая такую подписку, мок становится в контуре неприменим — а он ровно
+// для контура и сделан (docs/specs/2026-08-05-max-mock-design.md).
+//
+// Послабление минимальное: схема становится необязательной (`https?`), но
+// проверка формы остаётся — строка без схемы или с чужой (`ftp://`, «адрес
+// стенда») отвергается по-прежнему. Принятую http-подписку мок помечает в
+// поле `message` ответа, чтобы отступление было видно вызывающему, а не
+// только здесь (см. maxfacade.subscribe).
+//
+// Правятся оба места, где адрес приходит от бота: тело POST /subscriptions и
+// query-параметр DELETE /subscriptions. Пропустить второе значило бы принять
+// подписку, которую потом нельзя снять.
+func allowHTTPWebhookURL(doc *openapi3.T) error {
+	body := doc.Components.Schemas["SubscriptionRequestBody"]
+	if body == nil || body.Value == nil {
+		return errors.New("в контракте нет схемы SubscriptionRequestBody")
 	}
-	for name, ref := range doc.Components.Schemas {
-		if !strings.HasSuffix(name, "ChatType") || ref == nil || ref.Value == nil {
-			continue
-		}
-		for _, v := range ref.Value.Enum {
-			if s, ok := v.(string); ok && s == "dialog" {
-				return
-			}
-		}
-		ref.Value.Enum = append(ref.Value.Enum, "dialog")
+	if err := relaxURLScheme("SubscriptionRequestBody.url", body.Value.Properties["url"]); err != nil {
+		return err
 	}
+
+	item := doc.Paths.Find("/subscriptions")
+	if item == nil || item.Delete == nil {
+		return errors.New("в контракте нет операции DELETE /subscriptions")
+	}
+	for _, p := range item.Delete.Parameters {
+		if p.Value != nil && p.Value.Name == "url" {
+			return relaxURLScheme("DELETE /subscriptions?url", p.Value.Schema)
+		}
+	}
+	return errors.New("у DELETE /subscriptions нет параметра url")
+}
+
+// relaxURLScheme заменяет паттерн одного поля-адреса.
+//
+// Несовпадение исходного паттерна — ошибка запуска, а не повод молча ничего
+// не сделать: контракт переписали, и отступление нужно перепроверить, а не
+// обнаружить однажды по отвергнутой подписке. Именно так это послабление и
+// пропало в 0.0.33 — вместе с паттерном в контракте появилась ветка кода,
+// до которой перестал доходить запрос.
+func relaxURLScheme(where string, ref *openapi3.SchemaRef) error {
+	if ref == nil || ref.Value == nil {
+		return fmt.Errorf("в контракте нет поля %s", where)
+	}
+	if ref.Value.Pattern != httpsWebhookURL {
+		return fmt.Errorf("%s: ожидался pattern %s, в контракте %q — послабление для http:// нужно перепроверить",
+			where, httpsWebhookURL, ref.Value.Pattern)
+	}
+	ref.Value.Pattern = anyWebhookURL
+	return nil
 }
 
 // Load читает оба контракта из embed.FS и строит роутеры.
 func Load() (*Specs, error) {
-	bot, err := loadDoc(api.BotAPIFile)
+	bot, err := loadDoc(api.BotAPIFile, allowHTTPWebhookURL)
 	if err != nil {
 		return nil, err
 	}
@@ -234,6 +283,21 @@ func (s *Specs) ValidateResponse(ctx context.Context, r *http.Request, route *ro
 
 // ValidateWebhookBody проверяет тело исходящего события против контракта
 // webhook-эндпоинта (openapi.MaxBotWebhook.yaml).
+//
+// Проверок две, и вторая обязательна. Тело операции описано как
+// `anyOf: [UpdateUnified, WebhookUpdate]` — две равноправные формы на выбор
+// РАЗРАБОТЧИКА БОТА: плоская схема, где обязательны только `update_type` и
+// `timestamp`, и строгий oneOf из 16 конкретных типов. Для приёмника это
+// удобство, но `anyOf` проходит, если совпала ХОТЬ ОДНА ветвь, — а значит
+// плоская форма делает необязательными 37 полей, которые обязательны у
+// конкретных событий. Через неё пролезает `message_created` без `message`,
+// `user_added` без `chat_id`, событие с неизвестным `update_type` и даже
+// смесь полей от разных вариантов.
+//
+// Мок обязан держать себя строже, чем контракт разрешает приёмнику: он не
+// принимает событие, а порождает его, и снисходительность здесь означала бы
+// молча отправленное на стенд событие, которого живой Max не присылает.
+// Поэтому вдобавок к операции тело сверяется напрямую со строгой ветвью.
 func (s *Specs) ValidateWebhookBody(ctx context.Context, body []byte) error {
 	req, err := http.NewRequest(s.webhookMethod, s.webhookURL, bytes.NewReader(body))
 	if err != nil {
@@ -244,11 +308,33 @@ func (s *Specs) ValidateWebhookBody(ctx context.Context, body []byte) error {
 	if err != nil {
 		return fmt.Errorf("маршрут webhook не найден: %w", err)
 	}
-	return openapi3filter.ValidateRequest(ctx, &openapi3filter.RequestValidationInput{
+	if err := openapi3filter.ValidateRequest(ctx, &openapi3filter.RequestValidationInput{
 		Request:     req,
 		PathParams:  params,
 		QueryParams: url.Values{},
 		Route:       route,
 		Options:     requestOptions(),
-	})
+	}); err != nil {
+		return err
+	}
+	return s.validateStrictUpdate(body)
+}
+
+// validateStrictUpdate сверяет событие со схемой WebhookUpdate — строгой
+// ветвью anyOf (см. ValidateWebhookBody).
+func (s *Specs) validateStrictUpdate(body []byte) error {
+	ref := s.Webhook.Components.Schemas[strictUpdateSchema]
+	if ref == nil || ref.Value == nil {
+		// Схема пропала из контракта — это ошибка сборки, а не повод
+		// незаметно ослабить проверку.
+		return fmt.Errorf("схема %s отсутствует в контракте webhook", strictUpdateSchema)
+	}
+	var v any
+	if err := json.Unmarshal(body, &v); err != nil {
+		return fmt.Errorf("тело события не разобрано: %w", err)
+	}
+	if err := s.Webhook.ValidateSchemaJSON(ref.Value, v); err != nil {
+		return fmt.Errorf("событие не соответствует %s: %w", strictUpdateSchema, err)
+	}
+	return nil
 }

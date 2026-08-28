@@ -144,13 +144,6 @@ model MessageButton extends Button {
   type: "message";
 }
 
-/** Намерение кнопки */
-enum Intent {
-  positive: "positive",
-  negative: "negative",
-  `default`: "default",
-}
-
 /** После нажатия на такую кнопку клиент отправляет сообщение от лица пользователя с заданной полезной нагрузкой */
 @discriminator("type")
 model ReplyButton {

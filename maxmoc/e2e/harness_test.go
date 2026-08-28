@@ -55,7 +55,15 @@ type waiter struct {
 
 func newStand(t *testing.T, sp *specs.Specs) *stand {
 	s := &stand{t: t, specs: sp}
-	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Стенд поднимается по TLS: контракт требует https у webhook-URL подписки
+	// (SubscriptionRequestBody.url, pattern ^https://.+$), и сквозной тест
+	// идёт этим — основным — путём. Сертификат самоподписанный, мок доверяет
+	// ему через Webhook.InsecureSkipVerify (см. newMock).
+	//
+	// Подписка на http:// тоже принимается — послабление ради закрытого
+	// контура (specs.allowHTTPWebhookURL), — но проверяется отдельно, в
+	// maxfacade и specs: здесь важнее покрыть доставку на https-стенд.
+	s.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Errorf("стенд не смог прочитать тело: %v", err)
@@ -181,7 +189,9 @@ func newMock(t *testing.T) *mock {
 	}
 	cfg := config.Default()
 	cfg.BlobDir = filepath.Join(dir, "blobs")
-	cfg.Webhook = config.Webhook{TimeoutSec: 3, Retries: 1, BackoffSec: []int{0}}
+	// InsecureSkipVerify — стенды в тестах поднимаются на самоподписанных
+	// сертификатах httptest.NewTLSServer (см. newStand).
+	cfg.Webhook = config.Webhook{TimeoutSec: 3, Retries: 1, BackoffSec: []int{0}, InsecureSkipVerify: true}
 	bus := events.New()
 	disp, err := webhook.New(st, sp, bus, cfg.Webhook)
 	if err != nil {

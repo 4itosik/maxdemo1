@@ -18,7 +18,7 @@ make run
 
 ```
 max-mock: конфига config.yaml нет, запускаюсь на значениях по умолчанию
-max-mock: контракт 0.0.32, слушаю :8080
+max-mock: контракт 0.0.33, слушаю :8080
 max-mock: админка http://localhost:8080/mock, публичный адрес http://localhost:8080
 ```
 
@@ -350,7 +350,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
 боевом хосте:
 
 ```
-max-mock: контракт 0.0.32, слушаю https://:8443
+max-mock: контракт 0.0.33, слушаю https://:8443
 max-mock: сертификат max-mock.stand.local (SAN: max-mock.stand.local, 10.0.0.7), действителен до 2028-11-08
 ```
 
